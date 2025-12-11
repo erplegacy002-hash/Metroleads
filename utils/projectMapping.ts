@@ -9,7 +9,7 @@ export const USER_PROJECT_MAPPING: Record<string, string> = {
   "Smita Kad": "Kairos",
   "Sanket Jejurkar": "Kairos",
   "Pranav Satpute": "Milestone",
-  "Khushi Tamang": "Milestone",
+  "Khushi Tamang": "Statement",
   "Rakshanda Gupta": "Aqua Life",
   "Mohit Manani": "Aqua Life",
   "Manisha Singh": "Kairos",
