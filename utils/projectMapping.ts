@@ -27,7 +27,6 @@ export const USER_PROJECT_MAPPING: Record<string, string> = {
   "Sonali Shinde": "kairos",
   "Sakshi Jamdar": "kairos",
   "Sejal Satav": "kairos",
-  "Sakshi Jamdar": "kairos",
   // Add more users here
 };
 
