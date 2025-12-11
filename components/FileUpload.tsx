@@ -27,10 +27,11 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, selectedFile, dis
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
-      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+      // regex to match xlsx, xls, csv, xlsb, ods, xlsm
+      if (file.name.match(/\.(xlsx|xls|csv|xlsb|ods|xlsm)$/i)) {
         onFileSelect(file);
       } else {
-        alert("Please upload a valid Excel file (.xlsx or .xls)");
+        alert("Please upload a valid spreadsheet file (.xlsx, .xls, .csv, .xlsb, .ods, .xlsm)");
       }
     }
   }, [onFileSelect, disabled]);
@@ -62,12 +63,12 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, selectedFile, dis
             <p className="mb-2 text-sm text-slate-600">
               <span className="font-semibold">Click to upload</span> or drag and drop
             </p>
-            <p className="text-xs text-slate-500">XLSX or XLS files only</p>
+            <p className="text-xs text-slate-500">Supports .xlsx, .xls, .csv, .xlsb, .ods, .xlsm</p>
           </div>
           <input 
             type="file" 
             className="hidden" 
-            accept=".xlsx, .xls" 
+            accept=".xlsx,.xls,.csv,.xlsb,.ods,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" 
             onChange={handleFileInput} 
             disabled={disabled}
           />
