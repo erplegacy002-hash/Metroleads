@@ -109,7 +109,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   container.innerHTML = `
     <div style="background-color: white; color: black; font-family: Arial, sans-serif;">
       <div style="text-align: center; border: 1px solid #000; border-bottom: none; padding: 10px; background-color: #fff;">
-        <h2 style="margin: 0; font-size: 20px; font-weight: normal;">Today's Calling Report</h2>
+        <h2 style="margin: 0; font-size: 20px; font-weight: normal;">Today's Calling Report - ${siteName}</h2>
       </div>
       <table style="width: 100%; border-collapse: collapse; text-align: right;">
         <thead>
