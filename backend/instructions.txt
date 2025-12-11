@@ -1,0 +1,41 @@
+# How to Run the Application
+
+## 1. Backend Setup (Python)
+
+1. Navigate to the `backend` directory.
+2. Create a virtual environment (optional but recommended):
+   ```bash
+   python -m venv venv
+   # Windows
+   venv\Scripts\activate
+   # Mac/Linux
+   source venv/bin/activate
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Run the server:
+   ```bash
+   python main.py
+   ```
+   The server will start at `http://localhost:8000`.
+
+## 2. Frontend Setup (React)
+
+1. Ensure you have Node.js installed.
+2. Navigate to the root directory (where package.json would be in a standard CLI setup).
+3. If this were a standard `create-react-app` or `vite` project:
+   ```bash
+   npm install
+   npm start
+   ```
+   *Note: Since this is a generated single-file structure for demonstration:*
+   - Ensure the React build tool (like Vite) is configured to proxy `/api` requests to `http://localhost:8000` OR ensure the `API_BASE_URL` in `App.tsx` matches the running Python server port.
+
+## 3. Usage
+
+1. Open your browser to the Frontend URL (usually `http://localhost:3000`).
+2. Upload an Excel file containing at least `Project Name` and `Status` columns.
+3. Click "Process File".
+4. View the generated tables and download them individually or as a ZIP.
