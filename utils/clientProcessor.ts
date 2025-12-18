@@ -73,7 +73,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     top: '0',
     left: '0',
     zIndex: '-1000', 
-    width: '1000px',
+    width: '1200px', // Width for columns
     backgroundColor: '#ffffff',
     padding: '40px',
     fontFamily: "Arial, Helvetica, sans-serif", 
@@ -84,24 +84,39 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   
   if (rows.length === 0) return '';
 
-  // Define Headers matching the user's request
-  const displayHeaders = ["User Name", "Answered", "Call Duration", "Missed", "Total Count", "Average Call"];
+  // Define Headers matching the user's latest request
+  const displayHeaders = [
+    "User Name", 
+    "Answered", 
+    "Call Duration (Answered)", 
+    "Missed", 
+    "Call Duration (Missed)", 
+    "Total Call Duration", 
+    "Average Call"
+  ];
 
-  const headerHtml = displayHeaders.map(h => 
-    `<th style="padding: 12px 10px; text-align: right; border: 1px solid #000; font-size: 16px; font-weight: 600; color: #000; background-color: #fff;">
-      ${h === "User Name" ? '<div style="text-align: left;">' + h + '</div>' : h}
-    </th>`
-  ).join('');
+  const headerHtml = displayHeaders.map(h => {
+    // Logic to move text in brackets to a new line
+    let formattedHeader = h;
+    if (h.includes('(') && h.includes(')')) {
+      formattedHeader = h.replace(' (', '<br/>(');
+    }
+
+    return `<th style="padding: 12px 10px; text-align: right; border: 1px solid #000; font-size: 15px; font-weight: 600; color: #000; background-color: #fff; vertical-align: bottom;">
+      ${h === "User Name" ? '<div style="text-align: left;">' + formattedHeader + '</div>' : formattedHeader}
+    </th>`;
+  }).join('');
 
   const rowsHtml = rows.map((row) => {
     return `
       <tr>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 16px; text-align: left; color: #000;">${row['User Name']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 16px; text-align: right; color: #000;">${row['Answered']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 16px; text-align: right; color: #000;">${row['Call Duration']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 16px; text-align: right; color: #000;">${row['Missed']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 16px; text-align: right; color: #000;">${row['Total Count']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 16px; text-align: right; color: #000;">${row['Average Call']}</td>
+        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: left; color: #000;">${row['User Name']}</td>
+        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Answered']}</td>
+        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Call Duration (Answered)']}</td>
+        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Missed']}</td>
+        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Call Duration (Missed)']}</td>
+        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Total Call Duration']}</td>
+        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Average Call']}</td>
       </tr>
     `;
   }).join('');
@@ -211,8 +226,8 @@ export async function processFile(file: File): Promise<ProcessResponse> {
         const durationKey = durationKeyIndex !== -1 ? String(headerRow[durationKeyIndex]).trim() : null;
 
         // 2. Aggregate Data
-        // Structure: { SiteName: { UserName: { answered, missed, durationRaw } } }
-        const sites: Record<string, Record<string, { answered: number, missed: number, durationRaw: number }>> = {};
+        // Structure: { SiteName: { UserName: { answered, missed, durationAnsweredRaw, durationMissedRaw } } }
+        const sites: Record<string, Record<string, { answered: number, missed: number, durationAnsweredRaw: number, durationMissedRaw: number }>> = {};
 
         const normalizedMapping: Record<string, string> = {};
         Object.keys(USER_PROJECT_MAPPING).forEach(key => {
@@ -235,20 +250,25 @@ export async function processFile(file: File): Promise<ProcessResponse> {
           const durationRaw = parseDurationRaw(durationVal);
 
           if (!sites[siteName]) sites[siteName] = {};
-          if (!sites[siteName][userName]) sites[siteName][userName] = { answered: 0, missed: 0, durationRaw: 0 };
+          if (!sites[siteName][userName]) {
+            sites[siteName][userName] = { 
+              answered: 0, 
+              missed: 0, 
+              durationAnsweredRaw: 0, 
+              durationMissedRaw: 0 
+            };
+          }
 
           const stats = sites[siteName][userName];
           
           if (isAnswered(disposition)) {
             stats.answered += 1;
-            // Only add duration if the call was answered (Talk Time)
-            stats.durationRaw += durationRaw;
+            stats.durationAnsweredRaw += durationRaw;
           } else {
-            // Count as missed if not empty
-            if (disposition.length > 0) {
-              stats.missed += 1;
-            }
-            // Do NOT add duration for missed calls
+            // Count as missed
+            stats.missed += 1;
+            // Add duration to missed bucket as requested
+            stats.durationMissedRaw += durationRaw;
           }
         });
 
@@ -266,16 +286,18 @@ export async function processFile(file: File): Promise<ProcessResponse> {
           Object.keys(userStats).forEach(user => {
             const stat = userStats[user];
             // Calculations per rules:
-            const callDuration = stat.durationRaw / 60;
-            const avgCall = stat.answered > 0 ? (callDuration / stat.answered) : 0;
-            const totalCount = stat.answered + stat.missed;
+            const callDurationAnswered = stat.durationAnsweredRaw / 60;
+            const callDurationMissed = stat.durationMissedRaw / 60;
+            const totalCallDuration = callDurationAnswered + callDurationMissed;
+            const avgCall = stat.answered > 0 ? (callDurationAnswered / stat.answered) : 0;
             
             rows.push({
               "User Name": `User - ${user}`,
               "Answered": stat.answered,
-              "Call Duration": callDuration.toFixed(2),
+              "Call Duration (Answered)": callDurationAnswered.toFixed(2),
               "Missed": stat.missed,
-              "Total Count": totalCount,
+              "Call Duration (Missed)": callDurationMissed.toFixed(2),
+              "Total Call Duration": totalCallDuration.toFixed(2),
               "Average Call": avgCall.toFixed(2)
             });
           });
