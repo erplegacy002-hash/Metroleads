@@ -6,12 +6,14 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
 
 // --- Configuration ---
 
-// Using absolute paths starting with / ensures Vite/Vercel finds them in the public folder
+// Using Raw GitHub content URLs to ensure they are accessible from anywhere and avoid CORS issues during fetch
+const LOGO_BASE_URL = "https://raw.githubusercontent.com/erplegacy002-hash/Metroleads/main/";
+
 const PROJECT_LOGOS: Record<string, string> = {
-  "Aqua Life": "/aqualife.png",
-  "Kairos": "/kairos.png",
-  "Statement": "/statement.png",
-  "Milestone": "/milestone.png"
+  "Aqua Life": `${LOGO_BASE_URL}aqualife.png`,
+  "Kairos": `${LOGO_BASE_URL}kairos.png`,
+  "Statement": `${LOGO_BASE_URL}statement.png`,
+  "Milestone": `${LOGO_BASE_URL}milestone.png`
 };
 
 const logoDataCache: Record<string, string> = {};
@@ -22,12 +24,10 @@ async function getBase64FromUrl(url: string): Promise<string> {
   if (logoDataCache[url]) return logoDataCache[url];
   
   try {
-    // Ensure we fetch from the current origin for local assets
-    const fetchUrl = url.startsWith('http') ? url : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
-    const response = await fetch(fetchUrl);
+    const response = await fetch(url, { mode: 'cors' });
     
     if (!response.ok) {
-      console.warn(`Could not find logo file: ${fetchUrl} (Status: ${response.status})`);
+      console.warn(`Could not find logo file: ${url} (Status: ${response.status})`);
       return "";
     }
     
@@ -166,7 +166,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
         <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Call Duration (Answered)']}</td>
         <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Missed']}</td>
         <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Call Duration (Missed)']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-weight: 500; font-family: sans-serif;">${row['Total Call Duration']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-weight: 400; font-family: sans-serif;">${row['Total Call Duration']}</td>
         <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Total Call Count']}</td>
         <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Average Call']}</td>
       </tr>
@@ -183,11 +183,11 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     minute: '2-digit'
   });
 
-  const localLogoPath = PROJECT_LOGOS[siteName] || "";
-  const logoBase64 = localLogoPath ? await getBase64FromUrl(localLogoPath) : "";
+  const logoUrl = PROJECT_LOGOS[siteName] || "";
+  const logoBase64 = logoUrl ? await getBase64FromUrl(logoUrl) : "";
 
-  // Maintaining requested logo sizes
-  const logoHeight = (siteName === "Milestone" || siteName === "Kairos") ? '70px' : '65px';
+  // Further decreased logo sizes for better balance as requested
+  const logoHeight = (siteName === "Milestone" || siteName === "Kairos") ? '60px' : '55px';
 
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 2px solid #000000; box-sizing: border-box;">
@@ -195,7 +195,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
         <h2 style="margin: 0; font-size: 26px; font-weight: 800; color: #ffffff; text-transform: uppercase; text-align: left; flex: 1; letter-spacing: 0.5px; font-family: sans-serif;">CALLING REPORT AS ON ${timestamp}</h2>
         <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; padding-left: 20px;">
           ${logoBase64 
-            ? `<img src="${logoBase64}" alt="${siteName}" style="height: ${logoHeight}; width: auto; max-width: 400px; object-fit: contain; background-color: #000000; padding: 6px; border-radius: 4px;" />` 
+            ? `<img src="${logoBase64}" alt="${siteName}" style="height: ${logoHeight}; width: auto; max-width: 400px; object-fit: contain; background-color: #000000; padding: 4px; border-radius: 4px;" />` 
             : `<div style="color: #ffffff; font-size: 24px; font-weight: 900; padding: 10px 20px; border: 3px solid #ffffff; border-radius: 4px; letter-spacing: 1px; font-family: sans-serif;">${siteName.toUpperCase()}</div>`
           }
         </div>
@@ -213,7 +213,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
 
   document.body.appendChild(container);
   
-  // Wait for images and fonts to be ready
+  // Wait for images and fonts
   const imgs = container.getElementsByTagName('img');
   const imagePromises = Array.from(imgs).map(img => {
     if (img.complete) return Promise.resolve();
@@ -223,30 +223,25 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     });
   });
 
-  // Ensure fonts are loaded so table sizing is accurate
   if ('fonts' in document) {
     await (document as any).fonts.ready;
   }
   
   await Promise.all(imagePromises);
-  
-  // Extra buffer for Vercel/Headless rendering environments
   await new Promise(resolve => setTimeout(resolve, 1000));
 
   try {
     const dataUrl = await toPng(container, { 
       quality: 0.95, 
-      pixelRatio: 2, // Higher pixel ratio for crisp text
+      pixelRatio: 2,
       backgroundColor: '#ffffff', 
-      cacheBust: true,
-      skipFonts: false
+      cacheBust: true
     });
     
     if (!dataUrl || dataUrl.length < 5000) throw new Error("Blank capture detected.");
     return dataUrl;
   } catch (err: any) {
     console.error("Capture Error:", err);
-    // Fallback attempt
     return await toPng(container);
   } finally {
     if (document.body.contains(container)) {
