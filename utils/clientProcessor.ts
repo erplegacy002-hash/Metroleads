@@ -6,12 +6,13 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
 
 // --- Configuration ---
 
-// Using the GitHub blob URLs with ?raw=true as requested by the user.
+// Direct image links from ImgBB provided by the user.
+// These typically have excellent CORS support for browser-based processing.
 const PROJECT_LOGOS: Record<string, string> = {
-  "Aqua Life": "https://github.com/erplegacy002-hash/Metroleads/blob/main/aqualife.png?raw=true",
-  "Kairos": "https://github.com/erplegacy002-hash/Metroleads/blob/main/kairos.png?raw=true",
-  "Statement": "https://github.com/erplegacy002-hash/Metroleads/blob/main/statement.png?raw=true",
-  "Milestone": "https://github.com/erplegacy002-hash/Metroleads/blob/main/milestone.png?raw=true"
+  "Aqua Life": "https://i.ibb.co/jvNszzhQ/aqualife.png",
+  "Kairos": "https://i.ibb.co/zT4q42W4/kairos.png",
+  "Statement": "https://i.ibb.co/hJHsSqVH/statement.png",
+  "Milestone": "https://i.ibb.co/cS4QhzDB/milestone.png"
 };
 
 const logoDataCache: Record<string, string> = {};
@@ -19,56 +20,31 @@ const logoDataCache: Record<string, string> = {};
 // --- Logic Helpers ---
 
 /**
- * Converts an image URL to a base64 string using a canvas.
- * This approach is often more robust against certain CORS/redirect issues than fetch().
+ * Converts an image URL to a base64 string for image generation.
+ * ImgBB direct links (i.ibb.co) allow cross-origin requests which is 
+ * required for html-to-image to capture them.
  */
 async function getBase64FromUrl(url: string): Promise<string> {
   if (logoDataCache[url]) return logoDataCache[url];
   
-  return new Promise((resolve) => {
-    const img = new Image();
-    // Setting crossOrigin is essential for toDataURL to work on cross-origin images
-    img.setAttribute('crossOrigin', 'anonymous');
+  try {
+    const response = await fetch(url, { mode: 'cors' });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-          const dataURL = canvas.toDataURL('image/png');
-          logoDataCache[url] = dataURL;
-          resolve(dataURL);
-        } else {
-          resolve("");
-        }
-      } catch (err) {
-        console.warn("Canvas export failed for", url, err);
-        resolve("");
-      }
-    };
-
-    img.onerror = () => {
-      console.warn("Failed to load image via Image() for", url);
-      // Fallback: try to fetch directly if Image() fails
-      fetch(url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/').replace('?raw=true', ''))
-        .then(res => res.blob())
-        .then(blob => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const result = reader.result as string;
-            logoDataCache[url] = result;
-            resolve(result);
-          };
-          reader.readAsDataURL(blob);
-        })
-        .catch(() => resolve(""));
-    };
-
-    img.src = url;
-  });
+    const blob = await response.blob();
+    const base64: string = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    
+    logoDataCache[url] = base64;
+    return base64;
+  } catch (e) {
+    console.warn(`Unable to fetch logo for report generation: ${url}. Falling back to text-only header.`);
+    return "";
+  }
 }
 
 function isAnswered(status: string): boolean {

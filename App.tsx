@@ -47,7 +47,7 @@ const App: React.FC = () => {
             {/* X Separator */}
             <span className="text-2xl sm:text-4xl font-cinzel-dec text-slate-300 font-bold">X</span>
             
-            {/* Legacy Logo */}
+            {/* Legacy Logo - Using provided GitHub raw format */}
             <img 
               src="https://github.com/erplegacy002-hash/testbalkemal/blob/main/LOGO.png?raw=true" 
               alt="Legacy Lifespaces" 
