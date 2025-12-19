@@ -6,11 +6,12 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
 
 // --- Configuration ---
 
+// Using absolute paths starting with / ensures Vite/Vercel finds them in the public folder
 const PROJECT_LOGOS: Record<string, string> = {
-  "Aqua Life": "aqualife.png",
-  "Kairos": "kairos.png",
-  "Statement": "statement.png",
-  "Milestone": "milestone.png"
+  "Aqua Life": "/aqualife.png",
+  "Kairos": "/kairos.png",
+  "Statement": "/statement.png",
+  "Milestone": "/milestone.png"
 };
 
 const logoDataCache: Record<string, string> = {};
@@ -21,8 +22,14 @@ async function getBase64FromUrl(url: string): Promise<string> {
   if (logoDataCache[url]) return logoDataCache[url];
   
   try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Could not find local logo file: ${url}`);
+    // Ensure we fetch from the current origin for local assets
+    const fetchUrl = url.startsWith('http') ? url : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
+    const response = await fetch(fetchUrl);
+    
+    if (!response.ok) {
+      console.warn(`Could not find logo file: ${fetchUrl} (Status: ${response.status})`);
+      return "";
+    }
     
     const blob = await response.blob();
     const base64: string = await new Promise((resolve, reject) => {
@@ -32,13 +39,13 @@ async function getBase64FromUrl(url: string): Promise<string> {
       reader.readAsDataURL(blob);
     });
 
-    if (base64 && base64.length > 500) {
+    if (base64 && base64.length > 100) {
       logoDataCache[url] = base64;
       return base64;
     }
     return "";
   } catch (err) {
-    console.warn(`Failed to load local logo: ${url}. Proceeding with text fallback.`, err);
+    console.warn(`Failed to load logo: ${url}. Proceeding with text fallback.`, err);
     return "";
   }
 }
@@ -179,7 +186,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   const localLogoPath = PROJECT_LOGOS[siteName] || "";
   const logoBase64 = localLogoPath ? await getBase64FromUrl(localLogoPath) : "";
 
-  // Further decreased logo size for Milestone and Kairos to look more proper
+  // Maintaining requested logo sizes
   const logoHeight = (siteName === "Milestone" || siteName === "Kairos") ? '70px' : '65px';
 
   container.innerHTML = `
@@ -206,36 +213,40 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
 
   document.body.appendChild(container);
   
-  // Wait for images
+  // Wait for images and fonts to be ready
   const imgs = container.getElementsByTagName('img');
-  for (const img of Array.from(imgs)) {
-    if (img.complete) continue;
-    await new Promise((resolve) => {
+  const imagePromises = Array.from(imgs).map(img => {
+    if (img.complete) return Promise.resolve();
+    return new Promise((resolve) => {
       img.onload = resolve;
       img.onerror = resolve;
     });
+  });
+
+  // Ensure fonts are loaded so table sizing is accurate
+  if ('fonts' in document) {
+    await (document as any).fonts.ready;
   }
   
-  await new Promise(resolve => setTimeout(resolve, 800));
+  await Promise.all(imagePromises);
+  
+  // Extra buffer for Vercel/Headless rendering environments
+  await new Promise(resolve => setTimeout(resolve, 1000));
 
   try {
     const dataUrl = await toPng(container, { 
       quality: 0.95, 
-      pixelRatio: 1.5,
+      pixelRatio: 2, // Higher pixel ratio for crisp text
       backgroundColor: '#ffffff', 
       cacheBust: true,
-      filter: (node) => {
-        if (node.tagName === 'LINK' || node.tagName === 'STYLE') {
-          return false;
-        }
-        return true;
-      }
+      skipFonts: false
     });
     
     if (!dataUrl || dataUrl.length < 5000) throw new Error("Blank capture detected.");
     return dataUrl;
   } catch (err: any) {
     console.error("Capture Error:", err);
+    // Fallback attempt
     return await toPng(container);
   } finally {
     if (document.body.contains(container)) {
