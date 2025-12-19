@@ -72,7 +72,7 @@ function formatClockDuration(totalSeconds: number): string {
   let decPart = rounded - intPart;
 
   // Rollover logic: if decimal part is >= 0.60, carry over to the hour
-  // Using decPart > 0.59 to handle floating point precision for exactly 0.60
+  // Using decPart > 0.599 to handle floating point precision for exactly 0.60
   if (decPart > 0.599) {
     const extraHours = Math.floor(decPart / 0.6);
     const remainder = decPart % 0.6;
@@ -110,7 +110,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     "Missed", 
     "Call Duration (Missed)", 
     "Total Call Duration", 
-    "Total Count",
+    "Total Call Count",
     "Average Call"
   ];
 
@@ -134,7 +134,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
         <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Missed']}</td>
         <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Call Duration (Missed)']}</td>
         <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Total Call Duration']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Total Count']}</td>
+        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Total Call Count']}</td>
         <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Average Call']}</td>
       </tr>
     `;
@@ -306,7 +306,7 @@ export async function processFile(file: File): Promise<ProcessResponse> {
               "Missed": stat.missed,
               "Call Duration (Missed)": clockMissed,
               "Total Call Duration": clockTotal,
-              "Total Count": totalCount,
+              "Total Call Count": totalCount,
               "Average Call": avgCallMinutes.toFixed(2)
             });
           });
