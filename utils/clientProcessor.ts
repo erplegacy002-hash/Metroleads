@@ -7,7 +7,7 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
 // --- Configuration ---
 
 // Using Raw GitHub content URLs to ensure they are accessible from anywhere and avoid CORS issues during fetch
-const LOGO_BASE_URL = "https://raw.githubusercontent.com/erplegacy002-hash/Metroleads/main/";
+const LOGO_BASE_URL = "https://github.com/erplegacy002-hash/Metroleads/blob/main/";
 
 const PROJECT_LOGOS: Record<string, string> = {
   "Aqua Life": `${LOGO_BASE_URL}aqualife.png`,
