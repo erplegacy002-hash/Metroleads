@@ -6,47 +6,6 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
 
 // --- Configuration ---
 
-// Direct image links from ImgBB provided by the user.
-// These typically have excellent CORS support for browser-based processing.
-const PROJECT_LOGOS: Record<string, string> = {
-  "Aqua Life": "https://i.ibb.co/jvNszzhQ/aqualife.png",
-  "Kairos": "https://i.ibb.co/zT4q42W4/kairos.png",
-  "Statement": "https://i.ibb.co/hJHsSqVH/statement.png",
-  "Milestone": "https://i.ibb.co/cS4QhzDB/milestone.png"
-};
-
-const logoDataCache: Record<string, string> = {};
-
-// --- Logic Helpers ---
-
-/**
- * Converts an image URL to a base64 string for image generation.
- * ImgBB direct links (i.ibb.co) allow cross-origin requests which is 
- * required for html-to-image to capture them.
- */
-async function getBase64FromUrl(url: string): Promise<string> {
-  if (logoDataCache[url]) return logoDataCache[url];
-  
-  try {
-    const response = await fetch(url, { mode: 'cors' });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    
-    const blob = await response.blob();
-    const base64: string = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-    
-    logoDataCache[url] = base64;
-    return base64;
-  } catch (e) {
-    console.warn(`Unable to fetch logo for report generation: ${url}. Falling back to text-only header.`);
-    return "";
-  }
-}
-
 function isAnswered(status: string): boolean {
   const s = status.toLowerCase();
   
@@ -171,31 +130,17 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   }).join('');
 
   const now = new Date();
-  const timestamp = now.toLocaleDateString('en-GB', {
+  const dateStr = now.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
     year: 'numeric'
-  }).toUpperCase() + ' ' + now.toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  });
-
-  const logoUrl = PROJECT_LOGOS[siteName] || "";
-  const logoBase64 = logoUrl ? await getBase64FromUrl(logoUrl) : "";
-
-  const logoHeight = (siteName === "Milestone" || siteName === "Kairos") ? '60px' : '55px';
+  }).toUpperCase();
 
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 2px solid #000000; box-sizing: border-box;">
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000000; padding: 25px 35px; background-color: #000000;">
-        <h2 style="margin: 0; font-size: 26px; font-weight: 800; color: #ffffff; text-transform: uppercase; text-align: left; flex: 1; letter-spacing: 0.5px;">CALLING REPORT AS ON ${timestamp}</h2>
-        <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; padding-left: 20px;">
-          ${logoBase64 
-            ? `<img src="${logoBase64}" alt="${siteName}" style="height: ${logoHeight}; width: auto; max-width: 400px; object-fit: contain; background-color: #000000; padding: 4px; border-radius: 4px;" />` 
-            : `<div style="color: #ffffff; font-size: 24px; font-weight: 900; padding: 10px 20px; border: 3px solid #ffffff; border-radius: 4px; letter-spacing: 1px;">${siteName.toUpperCase()}</div>`
-          }
-        </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000000; padding: 25px 35px; background-color: #ffffff;">
+        <h2 style="margin: 0; font-size: 26px; font-weight: 800; color: #000000; text-transform: uppercase; letter-spacing: 1px;">CALLING REPORT - ${dateStr}</h2>
+        <div style="font-size: 26px; font-weight: 800; color: #000000; text-transform: uppercase; letter-spacing: 1px;">${siteName}</div>
       </div>
       <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
         <thead>
@@ -210,18 +155,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
 
   document.body.appendChild(container);
   
-  const imgs = container.getElementsByTagName('img');
-  const imagePromises = Array.from(imgs).map(img => {
-    if (img.complete) return Promise.resolve();
-    return new Promise((resolve) => {
-      img.onload = resolve;
-      img.onerror = resolve;
-    });
-  });
-
-  await Promise.all(imagePromises);
-  
-  await new Promise(resolve => setTimeout(resolve, 800));
+  await new Promise(resolve => setTimeout(resolve, 500));
 
   try {
     const dataUrl = await toPng(container, { 
