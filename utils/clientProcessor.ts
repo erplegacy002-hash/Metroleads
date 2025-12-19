@@ -288,10 +288,12 @@ export async function processFile(file: File): Promise<ProcessResponse> {
           Object.keys(userStats).forEach(user => {
             const stat = userStats[user];
             
+            const totalSeconds = stat.durationAnsweredRaw + stat.durationMissedRaw;
+
             // Format durations with the custom "Clock & Unit Logic" requested
             const clockAnswered = formatClockDuration(stat.durationAnsweredRaw);
             const clockMissed = formatClockDuration(stat.durationMissedRaw);
-            const clockTotal = formatClockDuration(stat.durationAnsweredRaw + stat.durationMissedRaw);
+            const clockTotal = formatClockDuration(totalSeconds);
             
             const totalCount = stat.answered + stat.missed;
             
@@ -307,11 +309,13 @@ export async function processFile(file: File): Promise<ProcessResponse> {
               "Call Duration (Missed)": clockMissed,
               "Total Call Duration": clockTotal,
               "Total Call Count": totalCount,
-              "Average Call": avgCallMinutes.toFixed(2)
+              "Average Call": avgCallMinutes.toFixed(2),
+              "rawTotalSeconds": totalSeconds // Used for sorting, hidden from table headers
             });
           });
 
-          rows.sort((a, b) => a["User Name"].localeCompare(b["User Name"]));
+          // Sort rows by Total Call Duration (rawTotalSeconds) from maximum to lowest
+          rows.sort((a, b) => b.rawTotalSeconds - a.rawTotalSeconds);
 
           const dataUrl = await generateTableImage(site, rows);
           const cleanName = site.replace(/[^a-z0-9]/gi, '_').toLowerCase();
