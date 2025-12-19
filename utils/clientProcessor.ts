@@ -6,8 +6,8 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
 
 // --- Configuration ---
 
-// Using Raw GitHub content URLs to ensure they are accessible from anywhere and avoid CORS issues during fetch
-const LOGO_BASE_URL = "https://github.com/erplegacy002-hash/Metroleads/blob/main/";
+// Use the RAW content domain for direct image access
+const LOGO_BASE_URL = "https://raw.githubusercontent.com/erplegacy002-hash/Metroleads/main/";
 
 const PROJECT_LOGOS: Record<string, string> = {
   "Aqua Life": `${LOGO_BASE_URL}aqualife.png`,
@@ -24,7 +24,11 @@ async function getBase64FromUrl(url: string): Promise<string> {
   if (logoDataCache[url]) return logoDataCache[url];
   
   try {
-    const response = await fetch(url, { mode: 'cors' });
+    // Adding a cache buster and ensuring CORS mode
+    const response = await fetch(url, { 
+      mode: 'cors',
+      cache: 'no-cache'
+    });
     
     if (!response.ok) {
       console.warn(`Could not find logo file: ${url} (Status: ${response.status})`);
@@ -128,7 +132,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     width: '1280px', 
     backgroundColor: '#ffffff', 
     padding: '40px',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    fontFamily: 'sans-serif',
     color: '#000000', 
     zIndex: '-9999',
     pointerEvents: 'none'
@@ -153,7 +157,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
       formattedHeader = h.replace(' (', '<br/>(');
     }
 
-    return `<th style="padding: 14px 10px; text-align: right; border: 1px solid #000000; font-size: 16px; font-weight: 700; color: #000000; background-color: #f3f4f6; vertical-align: bottom; line-height: 1.2; font-family: sans-serif;">
+    return `<th style="padding: 14px 10px; text-align: right; border: 1px solid #000000; font-size: 16px; font-weight: 700; color: #000000; background-color: #f3f4f6; vertical-align: bottom; line-height: 1.2;">
       ${h === "User Name" ? '<div style="text-align: left;">' + formattedHeader + '</div>' : formattedHeader}
     </th>`;
   }).join('');
@@ -161,14 +165,14 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   const rowsHtml = rows.map((row) => {
     return `
       <tr>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: left; color: #000000; font-weight: 500; font-family: sans-serif;">${row['User Name']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Answered']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Call Duration (Answered)']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Missed']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Call Duration (Missed)']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-weight: 400; font-family: sans-serif;">${row['Total Call Duration']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Total Call Count']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Average Call']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: left; color: #000000; font-weight: 500;">${row['User Name']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000;">${row['Answered']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000;">${row['Call Duration (Answered)']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000;">${row['Missed']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000;">${row['Call Duration (Missed)']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-weight: 400;">${row['Total Call Duration']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000;">${row['Total Call Count']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000;">${row['Average Call']}</td>
       </tr>
     `;
   }).join('');
@@ -178,25 +182,25 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     day: '2-digit',
     month: 'short',
     year: 'numeric'
-  }) + ' ' + now.toLocaleTimeString('en-GB', {
+  }).toUpperCase() + ' ' + now.toLocaleTimeString('en-GB', {
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    hour12: false
   });
 
   const logoUrl = PROJECT_LOGOS[siteName] || "";
   const logoBase64 = logoUrl ? await getBase64FromUrl(logoUrl) : "";
 
-  // Further decreased logo sizes for better balance as requested
   const logoHeight = (siteName === "Milestone" || siteName === "Kairos") ? '60px' : '55px';
 
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 2px solid #000000; box-sizing: border-box;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000000; padding: 25px 35px; background-color: #000000;">
-        <h2 style="margin: 0; font-size: 26px; font-weight: 800; color: #ffffff; text-transform: uppercase; text-align: left; flex: 1; letter-spacing: 0.5px; font-family: sans-serif;">CALLING REPORT AS ON ${timestamp}</h2>
+        <h2 style="margin: 0; font-size: 26px; font-weight: 800; color: #ffffff; text-transform: uppercase; text-align: left; flex: 1; letter-spacing: 0.5px;">CALLING REPORT AS ON ${timestamp}</h2>
         <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; padding-left: 20px;">
           ${logoBase64 
             ? `<img src="${logoBase64}" alt="${siteName}" style="height: ${logoHeight}; width: auto; max-width: 400px; object-fit: contain; background-color: #000000; padding: 4px; border-radius: 4px;" />` 
-            : `<div style="color: #ffffff; font-size: 24px; font-weight: 900; padding: 10px 20px; border: 3px solid #ffffff; border-radius: 4px; letter-spacing: 1px; font-family: sans-serif;">${siteName.toUpperCase()}</div>`
+            : `<div style="color: #ffffff; font-size: 24px; font-weight: 900; padding: 10px 20px; border: 3px solid #ffffff; border-radius: 4px; letter-spacing: 1px;">${siteName.toUpperCase()}</div>`
           }
         </div>
       </div>
@@ -213,7 +217,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
 
   document.body.appendChild(container);
   
-  // Wait for images and fonts
+  // Verify images loaded within the hidden container
   const imgs = container.getElementsByTagName('img');
   const imagePromises = Array.from(imgs).map(img => {
     if (img.complete) return Promise.resolve();
@@ -223,25 +227,25 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     });
   });
 
-  if ('fonts' in document) {
-    await (document as any).fonts.ready;
-  }
-  
   await Promise.all(imagePromises);
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  
+  // Short delay to ensure browser layout is stable
+  await new Promise(resolve => setTimeout(resolve, 800));
 
   try {
     const dataUrl = await toPng(container, { 
       quality: 0.95, 
       pixelRatio: 2,
       backgroundColor: '#ffffff', 
-      cacheBust: true
+      cacheBust: true,
+      includeStyles: true
     });
     
     if (!dataUrl || dataUrl.length < 5000) throw new Error("Blank capture detected.");
     return dataUrl;
   } catch (err: any) {
     console.error("Capture Error:", err);
+    // Secondary attempt with simpler config if primary fails
     return await toPng(container);
   } finally {
     if (document.body.contains(container)) {
