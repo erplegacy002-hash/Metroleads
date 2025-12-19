@@ -9,7 +9,6 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
 function isAnswered(status: string): boolean {
   const s = status.toLowerCase();
   
-  // CRITICAL FIX: Exclude negative statuses first
   if (s.includes('not ') || 
       s.includes('fail') || 
       s.includes('busy') || 
@@ -29,32 +28,22 @@ function isAnswered(status: string): boolean {
          s.includes('converted') || 
          s.includes('sale') || 
          s.includes('interested') ||
-         s.includes('visit') ||
-         s.includes('meeting') ||
-         s.includes('demo') ||
-         s.includes('deal') ||
+         s.includes('visit') || 
+         s.includes('meeting') || 
+         s.includes('demo') || 
+         s.includes('deal') || 
          s.includes('follow');
 }
 
 function parseDurationRaw(val: any): number {
-  // Returns duration in assumed 'Seconds' from source
   if (!val) return 0;
-  
-  if (typeof val === 'number') {
-    return val;
-  }
-
+  if (typeof val === 'number') return val;
   if (typeof val === 'string') {
     const v = val.trim();
-    // Check for HH:MM:SS or MM:SS
     if (v.includes(':')) {
       const parts = v.split(':').map(Number);
-      if (parts.length === 3) {
-        return parts[0] * 3600 + parts[1] * 60 + parts[2]; // HH:MM:SS -> Seconds
-      }
-      if (parts.length === 2) {
-        return parts[0] * 60 + parts[1]; // MM:SS -> Seconds
-      }
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
     }
     const parsed = parseFloat(v);
     return isNaN(parsed) ? 0 : parsed;
@@ -62,18 +51,48 @@ function parseDurationRaw(val: any): number {
   return 0;
 }
 
+/**
+ * Custom formatting logic as requested:
+ * 1. If total duration is less than 1 hour (<3600s), show in minutes (e.g., "30 mins").
+ * 2. If 1 hour or more, use decimal hours but apply "Clock Logic":
+ *    If the decimal part is >= 0.60, treat every 0.60 as an additional 1.00 hour.
+ *    Example: 1.60 standard becomes 2.00 clock.
+ */
+function formatClockDuration(totalSeconds: number): string {
+  if (totalSeconds < 3600) {
+    const totalMinutes = Math.floor(totalSeconds / 60);
+    return `${totalMinutes} mins`;
+  }
+
+  let hours = totalSeconds / 3600;
+  // Convert to 2-decimal rounded number for the "Clock Logic" processing
+  let rounded = Number(hours.toFixed(2));
+  
+  let intPart = Math.floor(rounded);
+  let decPart = rounded - intPart;
+
+  // Rollover logic: if decimal part is >= 0.60, carry over to the hour
+  // Using decPart > 0.59 to handle floating point precision for exactly 0.60
+  if (decPart > 0.599) {
+    const extraHours = Math.floor(decPart / 0.6);
+    const remainder = decPart % 0.6;
+    rounded = intPart + extraHours + remainder;
+  }
+
+  return rounded.toFixed(2) + " hrs";
+}
+
 // --- Image Generation ---
 
 async function generateTableImage(siteName: string, rows: any[]): Promise<string> {
   const container = document.createElement('div');
   
-  // Positioning Fix: 
   Object.assign(container.style, {
     position: 'absolute',
     top: '0',
     left: '0',
     zIndex: '-1000', 
-    width: '1200px', // Width for columns
+    width: '1450px',
     backgroundColor: '#ffffff',
     padding: '40px',
     fontFamily: "Arial, Helvetica, sans-serif", 
@@ -84,7 +103,6 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   
   if (rows.length === 0) return '';
 
-  // Define Headers matching the user's latest request
   const displayHeaders = [
     "User Name", 
     "Answered", 
@@ -92,11 +110,11 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     "Missed", 
     "Call Duration (Missed)", 
     "Total Call Duration", 
+    "Total Count",
     "Average Call"
   ];
 
   const headerHtml = displayHeaders.map(h => {
-    // Logic to move text in brackets to a new line
     let formattedHeader = h;
     if (h.includes('(') && h.includes(')')) {
       formattedHeader = h.replace(' (', '<br/>(');
@@ -116,6 +134,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
         <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Missed']}</td>
         <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Call Duration (Missed)']}</td>
         <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Total Call Duration']}</td>
+        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Total Count']}</td>
         <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Average Call']}</td>
       </tr>
     `;
@@ -123,8 +142,8 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
 
   container.innerHTML = `
     <div style="background-color: white; color: black; font-family: Arial, sans-serif;">
-      <div style="text-align: center; border: 1px solid #000; border-bottom: none; padding: 10px; background-color: #fff;">
-        <h2 style="margin: 0; font-size: 20px; font-weight: normal;">Today's Calling Report - ${siteName}</h2>
+      <div style="text-align: center; border: 1px solid #000; border-bottom: none; padding: 15px; background-color: #fff;">
+        <h2 style="margin: 0; font-size: 24px; font-weight: normal;">Today's Calling Report - ${siteName}</h2>
       </div>
       <table style="width: 100%; border-collapse: collapse; text-align: right;">
         <thead>
@@ -138,22 +157,17 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   `;
 
   document.body.appendChild(container);
-
-  // Critical: Wait a moment for the browser to render the DOM element before capturing
-  await new Promise(resolve => setTimeout(resolve, 100));
+  await new Promise(resolve => setTimeout(resolve, 200));
 
   try {
     const dataUrl = await toPng(container, { 
       quality: 1.0, 
       pixelRatio: 2,
-      backgroundColor: '#ffffff', // Explicitly set background
+      backgroundColor: '#ffffff',
       skipAutoScale: true,
       cacheBust: true,
       fontEmbedCSS: '', 
-      filter: (node) => {
-        if (node.tagName === 'LINK') return false;
-        return true;
-      }
+      filter: (node) => node.tagName !== 'LINK'
     });
     return dataUrl;
   } catch (err) {
@@ -182,11 +196,10 @@ export async function processFile(file: File): Promise<ProcessResponse> {
         const rawRows = utils.sheet_to_json(sheet, { header: 1 }) as any[][];
         if (!rawRows || rawRows.length === 0) throw new Error("Excel file appears to be empty.");
 
-        // 1. Detect Headers
         let headerIndex = -1;
-        let projectKeyIndex = -1; // Assigned To
-        let dispositionKeyIndex = -1;  // Disposition (Strictly prioritized)
-        let durationKeyIndex = -1; // Duration
+        let projectKeyIndex = -1; 
+        let dispositionKeyIndex = -1;
+        let durationKeyIndex = -1;
 
         const possibleProjectNames = ['assigned to', 'user', 'agent', 'project name'];
         const possibleDurationNames = ['duration', 'talk time', 'bill sec', 'call duration', 'time'];
@@ -195,13 +208,8 @@ export async function processFile(file: File): Promise<ProcessResponse> {
            const row = rawRows[i];
            if (!Array.isArray(row)) continue;
 
-           // Find Project/User column
            const pIdx = row.findIndex(cell => cell && typeof cell === 'string' && possibleProjectNames.some(t => cell.toLowerCase().trim() === t || cell.toLowerCase().includes(t)));
-           
-           // Find Disposition column - STRICT SEARCH FIRST
            let dIdx = row.findIndex(cell => cell && typeof cell === 'string' && cell.toLowerCase().includes('disposition'));
-           
-           // Fallback only if strict 'disposition' not found, check for 'Call Result'
            if (dIdx === -1) {
               dIdx = row.findIndex(cell => cell && typeof cell === 'string' && (cell.toLowerCase().includes('call result') || cell.toLowerCase().trim() === 'status'));
            }
@@ -225,8 +233,6 @@ export async function processFile(file: File): Promise<ProcessResponse> {
         const dispositionKey = String(headerRow[dispositionKeyIndex]).trim();
         const durationKey = durationKeyIndex !== -1 ? String(headerRow[durationKeyIndex]).trim() : null;
 
-        // 2. Aggregate Data
-        // Structure: { SiteName: { UserName: { answered, missed, durationAnsweredRaw, durationMissedRaw } } }
         const sites: Record<string, Record<string, { answered: number, missed: number, durationAnsweredRaw: number, durationMissedRaw: number }>> = {};
 
         const normalizedMapping: Record<string, string> = {};
@@ -242,9 +248,8 @@ export async function processFile(file: File): Promise<ProcessResponse> {
           const userName = String(rawUser).trim();
           
           const siteName = normalizedMapping[userName.toLowerCase()];
-          if (!siteName) return; // Filter unmapped users
+          if (!siteName) return; 
 
-          // Use the DISPOSITION column strictly for logic
           const disposition = String(row[dispositionKey] || '').trim();
           const durationVal = durationKey ? row[durationKey] : 0;
           const durationRaw = parseDurationRaw(durationVal);
@@ -265,9 +270,7 @@ export async function processFile(file: File): Promise<ProcessResponse> {
             stats.answered += 1;
             stats.durationAnsweredRaw += durationRaw;
           } else {
-            // Count as missed
             stats.missed += 1;
-            // Add duration to missed bucket as requested
             stats.durationMissedRaw += durationRaw;
           }
         });
@@ -278,31 +281,36 @@ export async function processFile(file: File): Promise<ProcessResponse> {
         const images: GeneratedImage[] = [];
         const zip = new JSZip();
 
-        // 3. Generate Reports
         for (const site of siteNames) {
           const userStats = sites[site];
           const rows: any[] = [];
 
           Object.keys(userStats).forEach(user => {
             const stat = userStats[user];
-            // Calculations per rules:
-            const callDurationAnswered = stat.durationAnsweredRaw / 60;
-            const callDurationMissed = stat.durationMissedRaw / 60;
-            const totalCallDuration = callDurationAnswered + callDurationMissed;
-            const avgCall = stat.answered > 0 ? (callDurationAnswered / stat.answered) : 0;
+            
+            // Format durations with the custom "Clock & Unit Logic" requested
+            const clockAnswered = formatClockDuration(stat.durationAnsweredRaw);
+            const clockMissed = formatClockDuration(stat.durationMissedRaw);
+            const clockTotal = formatClockDuration(stat.durationAnsweredRaw + stat.durationMissedRaw);
+            
+            const totalCount = stat.answered + stat.missed;
+            
+            // Average Call remains as standard minutes for calculation clarity
+            const minutesAnswered = stat.durationAnsweredRaw / 60;
+            const avgCallMinutes = stat.answered > 0 ? (minutesAnswered / stat.answered) : 0;
             
             rows.push({
               "User Name": `User - ${user}`,
               "Answered": stat.answered,
-              "Call Duration (Answered)": callDurationAnswered.toFixed(2),
+              "Call Duration (Answered)": clockAnswered,
               "Missed": stat.missed,
-              "Call Duration (Missed)": callDurationMissed.toFixed(2),
-              "Total Call Duration": totalCallDuration.toFixed(2),
-              "Average Call": avgCall.toFixed(2)
+              "Call Duration (Missed)": clockMissed,
+              "Total Call Duration": clockTotal,
+              "Total Count": totalCount,
+              "Average Call": avgCallMinutes.toFixed(2)
             });
           });
 
-          // Sort by Name
           rows.sort((a, b) => a["User Name"].localeCompare(b["User Name"]));
 
           const dataUrl = await generateTableImage(site, rows);

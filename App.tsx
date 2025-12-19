@@ -19,7 +19,6 @@ const App: React.FC = () => {
     setResult(null);
 
     try {
-      // NOTE: Using pure client-side processing since terminal access is unavailable.
       const data = await processFile(file);
       setResult(data);
     } catch (err: any) {
@@ -31,11 +30,13 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
-      {/* Branded Header */}
+    <div className="min-h-screen bg-slate-50 pb-20 font-cinzel">
+      {/* Branded Header - Logos Centered, Badge Top Right */}
       <header className="bg-white border-b border-amber-200/50 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-28 flex items-center justify-center">
-          <div className="flex items-center space-x-6 sm:space-x-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-32 flex items-center justify-center relative">
+          
+          {/* Main Logo Cluster (Centered) */}
+          <div className="flex items-center space-x-6 sm:space-x-12">
             {/* Metro Logo */}
             <img 
               src="https://d3uv32fm2waqiz.cloudfront.net/b6d7f27/img/metro-logo.png" 
@@ -53,6 +54,15 @@ const App: React.FC = () => {
               className="h-10 sm:h-14 w-auto object-contain"
             />
           </div>
+
+          {/* GPTW Badge (Top Right) */}
+          <div className="absolute top-2 right-2 sm:top-4 sm:right-4">
+            <img 
+              src="https://www.greatplacetowork.in/great/api/assets/uploads/13713/logo/batch.png" 
+              alt="Great Place to Work" 
+              className="h-14 sm:h-20 w-auto object-contain"
+            />
+          </div>
         </div>
       </header>
 
@@ -62,7 +72,7 @@ const App: React.FC = () => {
           <h2 className="text-3xl sm:text-5xl font-cinzel-dec font-bold text-slate-900 tracking-tight mb-4">
             Daily Report Processor
           </h2>
-          <p className="text-lg text-slate-600 max-w-2xl mx-auto font-cinzel">
+          <p className="text-lg text-slate-600 max-w-2xl mx-auto">
             Automated formatting for Project Performance Reports (Browser Mode)
           </p>
         </div>
@@ -77,7 +87,7 @@ const App: React.FC = () => {
         {/* Action Area */}
         <div className="flex flex-col items-center justify-center mb-16 space-y-4">
           {error && (
-            <div className="flex items-center space-x-2 text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-200 shadow-sm">
+            <div className="flex items-center space-x-2 text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-200 shadow-sm font-sans">
               <AlertCircle className="w-5 h-5" />
               <span>{error}</span>
             </div>
@@ -87,7 +97,7 @@ const App: React.FC = () => {
             onClick={handleProcess}
             disabled={!file || isLoading}
             className={`
-              flex items-center space-x-3 px-10 py-4 rounded-none font-cinzel font-bold text-lg tracking-wider shadow-md transition-all border
+              flex items-center space-x-3 px-10 py-4 rounded-none font-bold text-lg tracking-wider shadow-md transition-all border
               ${!file || isLoading 
                 ? 'bg-slate-300 text-slate-500 border-slate-300 cursor-not-allowed' 
                 : 'bg-[#1a1a1a] text-[#d4af37] border-[#d4af37] hover:bg-black hover:shadow-xl hover:scale-105'}
@@ -117,7 +127,7 @@ const App: React.FC = () => {
               <a
                 href={result.zip_url}
                 download="project_reports.zip"
-                className="flex items-center space-x-2 bg-[#d4af37] text-black px-6 py-2.5 rounded-sm hover:bg-[#c5a028] transition-colors shadow-sm font-cinzel font-bold text-sm uppercase tracking-wide"
+                className="flex items-center space-x-2 bg-[#d4af37] text-black px-6 py-2.5 rounded-sm hover:bg-[#c5a028] transition-colors shadow-sm font-bold text-sm uppercase tracking-wide"
               >
                 <Download className="w-4 h-4" />
                 <span>Download ZIP</span>
