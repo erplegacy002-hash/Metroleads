@@ -51,25 +51,20 @@ function parseDurationRaw(val: any): number {
   return 0;
 }
 
+/**
+ * Formats seconds into a string using colons as requested.
+ * Returns H:MM hrs or M:SS mins
+ */
 function formatClockDuration(totalSeconds: number): string {
   if (totalSeconds < 3600) {
-    const totalMinutes = Math.floor(totalSeconds / 60);
-    return `${totalMinutes} mins`;
+    const m = Math.floor(totalSeconds / 60);
+    const s = Math.floor(totalSeconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')} mins`;
   }
 
-  let hours = totalSeconds / 3600;
-  let rounded = Number(hours.toFixed(2));
-  
-  let intPart = Math.floor(rounded);
-  let decPart = rounded - intPart;
-
-  if (decPart > 0.599) {
-    const extraHours = Math.floor(decPart / 0.6);
-    const remainder = decPart % 0.6;
-    rounded = intPart + extraHours + remainder;
-  }
-
-  return rounded.toFixed(2) + " hrs";
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  return `${h}:${m.toString().padStart(2, '0')} hrs`;
 }
 
 // --- Image Generation ---
@@ -291,8 +286,12 @@ export async function processFile(file: File): Promise<ProcessResponse> {
             const clockTotal = formatClockDuration(totalSeconds);
             
             const totalCount = stat.answered + stat.missed;
-            const minutesAnswered = stat.durationAnsweredRaw / 60;
-            const avgCallMinutes = stat.answered > 0 ? (minutesAnswered / stat.answered) : 0;
+            
+            // Format average call duration as M:SS
+            const avgCallSeconds = stat.answered > 0 ? (stat.durationAnsweredRaw / stat.answered) : 0;
+            const avgM = Math.floor(avgCallSeconds / 60);
+            const avgS = Math.floor(avgCallSeconds % 60);
+            const avgDisplay = `${avgM}:${avgS.toString().padStart(2, '0')}`;
             
             rows.push({
               "User Name": `User - ${user}`,
@@ -302,7 +301,7 @@ export async function processFile(file: File): Promise<ProcessResponse> {
               "Call Duration (Missed)": clockMissed,
               "Total Call Duration": clockTotal,
               "Total Call Count": totalCount,
-              "Average Call": avgCallMinutes.toFixed(2),
+              "Average Call": avgDisplay,
               "rawTotalSeconds": totalSeconds
             });
           });
