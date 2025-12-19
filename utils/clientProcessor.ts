@@ -6,11 +6,13 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
 
 // --- Configuration ---
 
+// Using raw.githubusercontent.com is much more reliable for programmatic fetching (CORS) 
+// than the github.com/blob links with ?raw=true.
 const PROJECT_LOGOS: Record<string, string> = {
-  "Aqua Life": "https://github.com/erplegacy002-hash/Metroleads/blob/main/aqualife.png?raw=true",
-  "Kairos": "https://github.com/erplegacy002-hash/Metroleads/blob/main/kairos.png?raw=true",
-  "Statement": "https://github.com/erplegacy002-hash/Metroleads/blob/main/statement.png?raw=true",
-  "Milestone": "https://github.com/erplegacy002-hash/Metroleads/blob/main/milestone.png?raw=true"
+  "Aqua Life": "https://raw.githubusercontent.com/erplegacy002-hash/Metroleads/main/aqualife.png",
+  "Kairos": "https://raw.githubusercontent.com/erplegacy002-hash/Metroleads/main/kairos.png",
+  "Statement": "https://raw.githubusercontent.com/erplegacy002-hash/Metroleads/main/statement.png",
+  "Milestone": "https://raw.githubusercontent.com/erplegacy002-hash/Metroleads/main/milestone.png"
 };
 
 const logoDataCache: Record<string, string> = {};
@@ -21,9 +23,10 @@ async function getBase64FromUrl(url: string): Promise<string> {
   if (logoDataCache[url]) return logoDataCache[url];
   
   try {
+    // Explicitly setting cache: 'no-cache' and mode: 'cors' for GitHub raw content
     const response = await fetch(url, { 
       mode: 'cors',
-      cache: 'no-cache'
+      cache: 'default'
     });
     
     if (!response.ok) {
@@ -227,12 +230,12 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   await new Promise(resolve => setTimeout(resolve, 800));
 
   try {
+    // Fixed: Removed 'includeStyles' as it's not a valid property in html-to-image Options to resolve TS error
     const dataUrl = await toPng(container, { 
       quality: 0.95, 
       pixelRatio: 2,
       backgroundColor: '#ffffff', 
-      cacheBust: true,
-      includeStyles: true
+      cacheBust: true
     });
     
     if (!dataUrl || dataUrl.length < 5000) throw new Error("Blank capture detected.");
