@@ -4,7 +4,44 @@ import JSZip from 'jszip';
 import { GeneratedImage, ProcessResponse } from '../types';
 import { USER_PROJECT_MAPPING } from './projectMapping';
 
+// --- Configuration ---
+
+const PROJECT_LOGOS: Record<string, string> = {
+  "Aqua Life": "aqualife.png",
+  "Kairos": "kairos.png",
+  "Statement": "statement.png",
+  "Milestone": "milestone.png"
+};
+
+const logoDataCache: Record<string, string> = {};
+
 // --- Logic Helpers ---
+
+async function getBase64FromUrl(url: string): Promise<string> {
+  if (logoDataCache[url]) return logoDataCache[url];
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Could not find local logo file: ${url}`);
+    
+    const blob = await response.blob();
+    const base64: string = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    if (base64 && base64.length > 500) {
+      logoDataCache[url] = base64;
+      return base64;
+    }
+    return "";
+  } catch (err) {
+    console.warn(`Failed to load local logo: ${url}. Proceeding with text fallback.`, err);
+    return "";
+  }
+}
 
 function isAnswered(status: string): boolean {
   const s = status.toLowerCase();
@@ -51,13 +88,6 @@ function parseDurationRaw(val: any): number {
   return 0;
 }
 
-/**
- * Custom formatting logic as requested:
- * 1. If total duration is less than 1 hour (<3600s), show in minutes (e.g., "30 mins").
- * 2. If 1 hour or more, use decimal hours but apply "Clock Logic":
- *    If the decimal part is >= 0.60, treat every 0.60 as an additional 1.00 hour.
- *    Example: 1.60 standard becomes 2.00 clock.
- */
 function formatClockDuration(totalSeconds: number): string {
   if (totalSeconds < 3600) {
     const totalMinutes = Math.floor(totalSeconds / 60);
@@ -65,14 +95,11 @@ function formatClockDuration(totalSeconds: number): string {
   }
 
   let hours = totalSeconds / 3600;
-  // Convert to 2-decimal rounded number for the "Clock Logic" processing
   let rounded = Number(hours.toFixed(2));
   
   let intPart = Math.floor(rounded);
   let decPart = rounded - intPart;
 
-  // Rollover logic: if decimal part is >= 0.60, carry over to the hour
-  // Using decPart > 0.599 to handle floating point precision for exactly 0.60
   if (decPart > 0.599) {
     const extraHours = Math.floor(decPart / 0.6);
     const remainder = decPart % 0.6;
@@ -88,17 +115,16 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   const container = document.createElement('div');
   
   Object.assign(container.style, {
-    position: 'absolute',
+    position: 'fixed',
     top: '0',
     left: '0',
-    zIndex: '-1000', 
-    width: '1450px',
-    backgroundColor: '#ffffff',
+    width: '1280px', 
+    backgroundColor: '#ffffff', 
     padding: '40px',
-    fontFamily: "Arial, Helvetica, sans-serif", 
-    color: '#000000',
-    display: 'block',
-    visibility: 'visible'
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    color: '#000000', 
+    zIndex: '-9999',
+    pointerEvents: 'none'
   });
   
   if (rows.length === 0) return '';
@@ -120,7 +146,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
       formattedHeader = h.replace(' (', '<br/>(');
     }
 
-    return `<th style="padding: 12px 10px; text-align: right; border: 1px solid #000; font-size: 15px; font-weight: 600; color: #000; background-color: #fff; vertical-align: bottom;">
+    return `<th style="padding: 14px 10px; text-align: right; border: 1px solid #000000; font-size: 16px; font-weight: 700; color: #000000; background-color: #f3f4f6; vertical-align: bottom; line-height: 1.2; font-family: sans-serif;">
       ${h === "User Name" ? '<div style="text-align: left;">' + formattedHeader + '</div>' : formattedHeader}
     </th>`;
   }).join('');
@@ -128,24 +154,46 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   const rowsHtml = rows.map((row) => {
     return `
       <tr>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: left; color: #000;">${row['User Name']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Answered']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Call Duration (Answered)']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Missed']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Call Duration (Missed)']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Total Call Duration']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Total Call Count']}</td>
-        <td style="padding: 8px 10px; border: 1px solid #000; font-size: 15px; text-align: right; color: #000;">${row['Average Call']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: left; color: #000000; font-weight: 500; font-family: sans-serif;">${row['User Name']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Answered']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Call Duration (Answered)']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Missed']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Call Duration (Missed)']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-weight: 500; font-family: sans-serif;">${row['Total Call Duration']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Total Call Count']}</td>
+        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-family: sans-serif;">${row['Average Call']}</td>
       </tr>
     `;
   }).join('');
 
+  const now = new Date();
+  const timestamp = now.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  }) + ' ' + now.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  const localLogoPath = PROJECT_LOGOS[siteName] || "";
+  const logoBase64 = localLogoPath ? await getBase64FromUrl(localLogoPath) : "";
+
+  // Further decreased logo size for Milestone and Kairos to look more proper
+  const logoHeight = (siteName === "Milestone" || siteName === "Kairos") ? '70px' : '65px';
+
   container.innerHTML = `
-    <div style="background-color: white; color: black; font-family: Arial, sans-serif;">
-      <div style="text-align: center; border: 1px solid #000; border-bottom: none; padding: 15px; background-color: #fff;">
-        <h2 style="margin: 0; font-size: 24px; font-weight: normal;">Today's Calling Report - ${siteName}</h2>
+    <div style="background-color: #ffffff; width: 100%; border: 2px solid #000000; box-sizing: border-box;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000000; padding: 25px 35px; background-color: #000000;">
+        <h2 style="margin: 0; font-size: 26px; font-weight: 800; color: #ffffff; text-transform: uppercase; text-align: left; flex: 1; letter-spacing: 0.5px; font-family: sans-serif;">CALLING REPORT AS ON ${timestamp}</h2>
+        <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; padding-left: 20px;">
+          ${logoBase64 
+            ? `<img src="${logoBase64}" alt="${siteName}" style="height: ${logoHeight}; width: auto; max-width: 400px; object-fit: contain; background-color: #000000; padding: 6px; border-radius: 4px;" />` 
+            : `<div style="color: #ffffff; font-size: 24px; font-weight: 900; padding: 10px 20px; border: 3px solid #ffffff; border-radius: 4px; letter-spacing: 1px; font-family: sans-serif;">${siteName.toUpperCase()}</div>`
+          }
+        </div>
       </div>
-      <table style="width: 100%; border-collapse: collapse; text-align: right;">
+      <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
         <thead>
           <tr>${headerHtml}</tr>
         </thead>
@@ -157,22 +205,38 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   `;
 
   document.body.appendChild(container);
-  await new Promise(resolve => setTimeout(resolve, 200));
+  
+  // Wait for images
+  const imgs = container.getElementsByTagName('img');
+  for (const img of Array.from(imgs)) {
+    if (img.complete) continue;
+    await new Promise((resolve) => {
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
+  }
+  
+  await new Promise(resolve => setTimeout(resolve, 800));
 
   try {
     const dataUrl = await toPng(container, { 
-      quality: 1.0, 
-      pixelRatio: 2,
-      backgroundColor: '#ffffff',
-      skipAutoScale: true,
+      quality: 0.95, 
+      pixelRatio: 1.5,
+      backgroundColor: '#ffffff', 
       cacheBust: true,
-      fontEmbedCSS: '', 
-      filter: (node) => node.tagName !== 'LINK'
+      filter: (node) => {
+        if (node.tagName === 'LINK' || node.tagName === 'STYLE') {
+          return false;
+        }
+        return true;
+      }
     });
+    
+    if (!dataUrl || dataUrl.length < 5000) throw new Error("Blank capture detected.");
     return dataUrl;
-  } catch (err) {
-    console.error("Image generation failed:", err);
-    return '';
+  } catch (err: any) {
+    console.error("Capture Error:", err);
+    return await toPng(container);
   } finally {
     if (document.body.contains(container)) {
       document.body.removeChild(container);
@@ -224,7 +288,7 @@ export async function processFile(file: File): Promise<ProcessResponse> {
         }
 
         if (headerIndex === -1) {
-          throw new Error("Could not find required columns: 'Assigned To' and 'Disposition'.");
+          throw new Error("Columns not found. Ensure 'Assigned To' and 'Disposition' are present.");
         }
 
         const jsonData = utils.sheet_to_json(sheet, { range: headerIndex, raw: false, defval: "" });
@@ -276,7 +340,7 @@ export async function processFile(file: File): Promise<ProcessResponse> {
         });
 
         const siteNames = Object.keys(sites);
-        if (siteNames.length === 0) throw new Error("No matching data found.");
+        if (siteNames.length === 0) throw new Error("No data found for the predefined users.");
 
         const images: GeneratedImage[] = [];
         const zip = new JSZip();
@@ -287,17 +351,13 @@ export async function processFile(file: File): Promise<ProcessResponse> {
 
           Object.keys(userStats).forEach(user => {
             const stat = userStats[user];
-            
             const totalSeconds = stat.durationAnsweredRaw + stat.durationMissedRaw;
 
-            // Format durations with the custom "Clock & Unit Logic" requested
             const clockAnswered = formatClockDuration(stat.durationAnsweredRaw);
             const clockMissed = formatClockDuration(stat.durationMissedRaw);
             const clockTotal = formatClockDuration(totalSeconds);
             
             const totalCount = stat.answered + stat.missed;
-            
-            // Average Call remains as standard minutes for calculation clarity
             const minutesAnswered = stat.durationAnsweredRaw / 60;
             const avgCallMinutes = stat.answered > 0 ? (minutesAnswered / stat.answered) : 0;
             
@@ -310,14 +370,15 @@ export async function processFile(file: File): Promise<ProcessResponse> {
               "Total Call Duration": clockTotal,
               "Total Call Count": totalCount,
               "Average Call": avgCallMinutes.toFixed(2),
-              "rawTotalSeconds": totalSeconds // Used for sorting, hidden from table headers
+              "rawTotalSeconds": totalSeconds
             });
           });
 
-          // Sort rows by Total Call Duration (rawTotalSeconds) from maximum to lowest
           rows.sort((a, b) => b.rawTotalSeconds - a.rawTotalSeconds);
 
           const dataUrl = await generateTableImage(site, rows);
+          if (!dataUrl) continue;
+
           const cleanName = site.replace(/[^a-z0-9]/gi, '_').toLowerCase();
           const filename = `${cleanName}_summary.png`;
 
