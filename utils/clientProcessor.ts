@@ -6,14 +6,11 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
 
 // --- Configuration ---
 
-// Use the RAW content domain for direct image access
-const LOGO_BASE_URL = "https://raw.githubusercontent.com/erplegacy002-hash/Metroleads/main/";
-
 const PROJECT_LOGOS: Record<string, string> = {
-  "Aqua Life": `${LOGO_BASE_URL}aqualife.png`,
-  "Kairos": `${LOGO_BASE_URL}kairos.png`,
-  "Statement": `${LOGO_BASE_URL}statement.png`,
-  "Milestone": `${LOGO_BASE_URL}milestone.png`
+  "Aqua Life": "https://github.com/erplegacy002-hash/Metroleads/blob/main/aqualife.png?raw=true",
+  "Kairos": "https://github.com/erplegacy002-hash/Metroleads/blob/main/kairos.png?raw=true",
+  "Statement": "https://github.com/erplegacy002-hash/Metroleads/blob/main/statement.png?raw=true",
+  "Milestone": "https://github.com/erplegacy002-hash/Metroleads/blob/main/milestone.png?raw=true"
 };
 
 const logoDataCache: Record<string, string> = {};
@@ -24,7 +21,6 @@ async function getBase64FromUrl(url: string): Promise<string> {
   if (logoDataCache[url]) return logoDataCache[url];
   
   try {
-    // Adding a cache buster and ensuring CORS mode
     const response = await fetch(url, { 
       mode: 'cors',
       cache: 'no-cache'
@@ -217,7 +213,6 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
 
   document.body.appendChild(container);
   
-  // Verify images loaded within the hidden container
   const imgs = container.getElementsByTagName('img');
   const imagePromises = Array.from(imgs).map(img => {
     if (img.complete) return Promise.resolve();
@@ -229,7 +224,6 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
 
   await Promise.all(imagePromises);
   
-  // Short delay to ensure browser layout is stable
   await new Promise(resolve => setTimeout(resolve, 800));
 
   try {
@@ -245,7 +239,6 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     return dataUrl;
   } catch (err: any) {
     console.error("Capture Error:", err);
-    // Secondary attempt with simpler config if primary fails
     return await toPng(container);
   } finally {
     if (document.body.contains(container)) {
