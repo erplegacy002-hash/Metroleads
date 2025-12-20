@@ -52,19 +52,20 @@ function parseDurationRaw(val: any): number {
 }
 
 /**
- * Formats seconds into a string using colons as requested.
- * Returns H:MM hrs or M:SS mins
+ * Formats seconds into a string using 'hour logic'.
+ * If >= 1 hour, returns H:MM hrs
+ * If < 1 hour, returns M:SS mins
  */
-function formatClockDuration(totalSeconds: number): string {
-  if (totalSeconds < 3600) {
+function formatWithHourLogic(totalSeconds: number): string {
+  if (totalSeconds >= 3600) {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    return `${h}:${m.toString().padStart(2, '0')} hrs`;
+  } else {
     const m = Math.floor(totalSeconds / 60);
     const s = Math.floor(totalSeconds % 60);
     return `${m}:${s.toString().padStart(2, '0')} mins`;
   }
-
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  return `${h}:${m.toString().padStart(2, '0')} hrs`;
 }
 
 // --- Image Generation ---
@@ -76,9 +77,9 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     position: 'fixed',
     top: '0',
     left: '0',
-    width: '1280px', 
+    width: '780px', 
     backgroundColor: '#ffffff', 
-    padding: '40px',
+    padding: '15px', 
     fontFamily: 'sans-serif',
     color: '#000000', 
     zIndex: '-9999',
@@ -94,7 +95,7 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     "Missed", 
     "Call Duration (Missed)", 
     "Total Call Duration", 
-    "Total Call Count",
+    "Total Count",
     "Average Call"
   ];
 
@@ -102,24 +103,28 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     let formattedHeader = h;
     if (h.includes('(') && h.includes(')')) {
       formattedHeader = h.replace(' (', '<br/>(');
+    } else if (h === "Total Call Duration") {
+      formattedHeader = "Total Call<br/>Duration";
     }
 
-    return `<th style="padding: 14px 10px; text-align: right; border: 1px solid #000000; font-size: 16px; font-weight: 700; color: #000000; background-color: #f3f4f6; vertical-align: bottom; line-height: 1.2;">
-      ${h === "User Name" ? '<div style="text-align: left;">' + formattedHeader + '</div>' : formattedHeader}
+    const alignment = h === "User Name" ? 'left' : 'center';
+
+    return `<th style="padding: 6px 4px; text-align: ${alignment}; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; vertical-align: bottom; line-height: 1.1;">
+      ${formattedHeader}
     </th>`;
   }).join('');
 
   const rowsHtml = rows.map((row) => {
     return `
       <tr>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: left; color: #000000; font-weight: 500;">${row['User Name']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000;">${row['Answered']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000;">${row['Call Duration (Answered)']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000;">${row['Missed']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000;">${row['Call Duration (Missed)']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000; font-weight: 400;">${row['Total Call Duration']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000;">${row['Total Call Count']}</td>
-        <td style="padding: 12px 10px; border: 1px solid #000000; font-size: 15px; text-align: right; color: #000000;">${row['Average Call']}</td>
+        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: left; color: #000000; font-weight: 500;">${row['User Name']}</td>
+        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Answered']}</td>
+        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Call Duration (Answered)']}</td>
+        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Missed']}</td>
+        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Call Duration (Missed)']}</td>
+        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 400;">${row['Total Call Duration']}</td>
+        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Total Count']}</td>
+        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Average Call']}</td>
       </tr>
     `;
   }).join('');
@@ -132,10 +137,13 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   }).toUpperCase();
 
   container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 2px solid #000000; box-sizing: border-box;">
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000000; padding: 25px 35px; background-color: #ffffff;">
-        <h2 style="margin: 0; font-size: 26px; font-weight: 800; color: #000000; text-transform: uppercase; letter-spacing: 1px;">CALLING REPORT - ${dateStr}</h2>
-        <div style="font-size: 26px; font-weight: 800; color: #000000; text-transform: uppercase; letter-spacing: 1px;">${siteName}</div>
+    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
+      <div style="padding: 12px 15px; background-color: #ffffff; text-align: center; border-bottom: 1px solid #000000;">
+        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase; letter-spacing: 0.5px;">CALLING REPORT</div>
+        <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
+        <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase; letter-spacing: 1px; margin: 4px 0;">${siteName}</div>
+        <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
+        <div style="font-size: 12px; font-weight: 700; color: #000000; text-transform: uppercase; letter-spacing: 0.5px;">${dateStr}</div>
       </div>
       <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
         <thead>
@@ -281,13 +289,14 @@ export async function processFile(file: File): Promise<ProcessResponse> {
             const stat = userStats[user];
             const totalSeconds = stat.durationAnsweredRaw + stat.durationMissedRaw;
 
-            const clockAnswered = formatClockDuration(stat.durationAnsweredRaw);
-            const clockMissed = formatClockDuration(stat.durationMissedRaw);
-            const clockTotal = formatClockDuration(totalSeconds);
+            // Apply hour logic to formatted durations
+            const displayAnsweredDur = formatWithHourLogic(stat.durationAnsweredRaw);
+            const displayMissedDur = formatWithHourLogic(stat.durationMissedRaw);
+            const displayTotalDur = formatWithHourLogic(totalSeconds);
             
             const totalCount = stat.answered + stat.missed;
             
-            // Format average call duration as M:SS
+            // Average call duration remains in M:SS
             const avgCallSeconds = stat.answered > 0 ? (stat.durationAnsweredRaw / stat.answered) : 0;
             const avgM = Math.floor(avgCallSeconds / 60);
             const avgS = Math.floor(avgCallSeconds % 60);
@@ -296,11 +305,11 @@ export async function processFile(file: File): Promise<ProcessResponse> {
             rows.push({
               "User Name": `User - ${user}`,
               "Answered": stat.answered,
-              "Call Duration (Answered)": clockAnswered,
+              "Call Duration (Answered)": displayAnsweredDur,
               "Missed": stat.missed,
-              "Call Duration (Missed)": clockMissed,
-              "Total Call Duration": clockTotal,
-              "Total Call Count": totalCount,
+              "Call Duration (Missed)": displayMissedDur,
+              "Total Call Duration": displayTotalDur,
+              "Total Count": totalCount,
               "Average Call": avgDisplay,
               "rawTotalSeconds": totalSeconds
             });
