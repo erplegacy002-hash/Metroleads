@@ -6,38 +6,47 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
 
 // --- Configuration ---
 
-function isAnswered(status: string): boolean {
-  const s = status.toLowerCase();
+/**
+ * Categorizes a call status. 
+ * If it matches known success keywords, it's Answered.
+ * Otherwise, it's counted as Missed (ensuring total count is accurate).
+ */
+function isAnswered(status: any): boolean {
+  if (status === null || status === undefined) return false;
+  const s = String(status).toLowerCase().trim();
   
-  if (s.includes('not ') || 
-      s.includes('fail') || 
-      s.includes('busy') || 
-      s.includes('voice') || 
-      s.includes('missed') || 
-      s.includes('wrong') || 
-      s.includes('invalid') ||
-      s.includes('switched off') ||
-      s.includes('not reachable') ||
-      s.includes('no answer')) {
-    return false;
+  // Explicit "Answered" markers
+  const answeredKeywords = [
+    'connected', 'talked', 'answer', 'converted', 'sale', 
+    'interested', 'visit', 'meeting', 'demo', 'deal', 'follow'
+  ];
+
+  const matchesAnswered = answeredKeywords.some(kw => s.includes(kw));
+  
+  // Ensure we don't treat "Not Answered" as Answered
+  if (matchesAnswered) {
+    const isFalsePositive = s.includes('not ') || s.includes('no ');
+    if (isFalsePositive && !s.includes('connected')) return false;
+    return true;
   }
 
-  return s.includes('connected') || 
-         s.includes('talked') || 
-         s.includes('answer') || 
-         s.includes('converted') || 
-         s.includes('sale') || 
-         s.includes('interested') ||
-         s.includes('visit') || 
-         s.includes('meeting') || 
-         s.includes('demo') || 
-         s.includes('deal') || 
-         s.includes('follow');
+  return false;
 }
 
+/**
+ * Handles durations from Excel "Editing Mode" (raw values).
+ */
 function parseDurationRaw(val: any): number {
-  if (!val) return 0;
-  if (typeof val === 'number') return val;
+  if (val === null || val === undefined) return 0;
+  
+  if (typeof val === 'number') {
+    // Excel Time Serial check (fraction of 24h)
+    if (val > 0 && val < 1) {
+      return Math.round(val * 86400);
+    }
+    return val;
+  }
+  
   if (typeof val === 'string') {
     const v = val.trim();
     if (v.includes(':')) {
@@ -52,10 +61,29 @@ function parseDurationRaw(val: any): number {
 }
 
 /**
- * Formats seconds into a string using 'hour logic'.
- * If >= 1 hour, returns H:MM hrs
- * If < 1 hour, returns M:SS mins
+ * Extracts a date from filename in format YYYY-MM-DD
  */
+function extractDateFromFilename(filename: string): string {
+  const datePattern = /(\d{4})-(\d{2})-(\d{2})/;
+  const match = filename.match(datePattern);
+  
+  if (match) {
+    const [_, year, month, day] = match;
+    const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    return dateObj.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    }).toUpperCase();
+  }
+
+  return new Date().toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  }).toUpperCase();
+}
+
 function formatWithHourLogic(totalSeconds: number): string {
   if (totalSeconds >= 3600) {
     const h = Math.floor(totalSeconds / 3600);
@@ -70,9 +98,8 @@ function formatWithHourLogic(totalSeconds: number): string {
 
 // --- Image Generation ---
 
-async function generateTableImage(siteName: string, rows: any[]): Promise<string> {
+async function generateTableImage(siteName: string, rows: any[], displayDate: string): Promise<string> {
   const container = document.createElement('div');
-  
   Object.assign(container.style, {
     position: 'fixed',
     top: '0',
@@ -89,14 +116,9 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
   if (rows.length === 0) return '';
 
   const displayHeaders = [
-    "User Name", 
-    "Answered", 
-    "Call Duration (Answered)", 
-    "Missed", 
-    "Call Duration (Missed)", 
-    "Total Call Duration", 
-    "Total Count",
-    "Average Call"
+    "User Name", "Answered", "Call Duration (Answered)", 
+    "Missed", "Call Duration (Missed)", "Total Call Duration", 
+    "Total Count", "Average Call"
   ];
 
   const headerHtml = displayHeaders.map(h => {
@@ -106,77 +128,48 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
     } else if (h === "Total Call Duration") {
       formattedHeader = "Total Call<br/>Duration";
     }
-
     const alignment = h === "User Name" ? 'left' : 'center';
-
     return `<th style="padding: 6px 4px; text-align: ${alignment}; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; vertical-align: bottom; line-height: 1.1;">
       ${formattedHeader}
     </th>`;
   }).join('');
 
-  const rowsHtml = rows.map((row) => {
-    return `
-      <tr>
-        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: left; color: #000000; font-weight: 500;">${row['User Name']}</td>
-        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Answered']}</td>
-        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Call Duration (Answered)']}</td>
-        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Missed']}</td>
-        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Call Duration (Missed)']}</td>
-        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 400;">${row['Total Call Duration']}</td>
-        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Total Count']}</td>
-        <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Average Call']}</td>
-      </tr>
-    `;
-  }).join('');
-
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  }).toUpperCase();
+  const rowsHtml = rows.map((row) => `
+    <tr>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: left; color: #000000; font-weight: 500;">${row['User Name']}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Answered']}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Call Duration (Answered)']}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Missed']}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Call Duration (Missed)']}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Total Call Duration']}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Total Count']}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Average Call']}</td>
+    </tr>
+  `).join('');
 
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center; border-bottom: 1px solid #000000;">
-        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase; letter-spacing: 0.5px;">CALLING REPORT</div>
+        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">CALLING REPORT</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase; letter-spacing: 1px; margin: 4px 0;">${siteName}</div>
+        <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 12px; font-weight: 700; color: #000000; text-transform: uppercase; letter-spacing: 0.5px;">${dateStr}</div>
+        <div style="font-size: 12px; font-weight: 700; color: #000000;">${displayDate}</div>
       </div>
       <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
-        <thead>
-          <tr>${headerHtml}</tr>
-        </thead>
-        <tbody>
-          ${rowsHtml}
-        </tbody>
+        <thead><tr>${headerHtml}</tr></thead>
+        <tbody>${rowsHtml}</tbody>
       </table>
     </div>
   `;
 
   document.body.appendChild(container);
-  
-  await new Promise(resolve => setTimeout(resolve, 500));
+  await new Promise(resolve => setTimeout(resolve, 600));
 
   try {
-    const dataUrl = await toPng(container, { 
-      quality: 0.95, 
-      pixelRatio: 2,
-      backgroundColor: '#ffffff', 
-      cacheBust: true
-    });
-    
-    if (!dataUrl || dataUrl.length < 5000) throw new Error("Blank capture detected.");
-    return dataUrl;
-  } catch (err: any) {
-    console.error("Capture Error:", err);
-    return await toPng(container);
+    return await toPng(container, { quality: 0.95, pixelRatio: 2 });
   } finally {
-    if (document.body.contains(container)) {
-      document.body.removeChild(container);
-    }
+    if (document.body.contains(container)) document.body.removeChild(container);
   }
 }
 
@@ -185,165 +178,137 @@ async function generateTableImage(siteName: string, rows: any[]): Promise<string
 export async function processFile(file: File): Promise<ProcessResponse> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    
     reader.onload = async (e) => {
       try {
         const data = e.target?.result;
-        const workbook = read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
+        const workbook = read(data, { type: 'array', cellDates: true, cellNF: true, cellFormula: true });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rawRows = utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
         
-        const rawRows = utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-        if (!rawRows || rawRows.length === 0) throw new Error("Excel file appears to be empty.");
+        if (!rawRows || rawRows.length === 0) throw new Error("Excel file is empty.");
 
+        // Detect Columns
         let headerIndex = -1;
-        let projectKeyIndex = -1; 
-        let dispositionKeyIndex = -1;
-        let durationKeyIndex = -1;
+        let userColIdx = -1, dispositionColIdx = -1, durationColIdx = -1;
 
-        const possibleProjectNames = ['assigned to', 'user', 'agent', 'project name'];
-        const possibleDurationNames = ['duration', 'talk time', 'bill sec', 'call duration', 'time'];
+        // "Terminated on" is prioritized for the username as requested.
+        // We REMOVE 'project name' from userAliases to ensure it doesn't pick that up instead.
+        const userAliases = ['terminated on', 'assigned to', 'user', 'agent', 'employee'];
+        const durationAliases = ['duration', 'talk time', 'bill sec', 'call duration', 'time'];
+        const dispAliases = ['disposition', 'status', 'call result', 'result'];
 
-        for (let i = 0; i < Math.min(20, rawRows.length); i++) {
-           const row = rawRows[i];
-           if (!Array.isArray(row)) continue;
+        for (let i = 0; i < Math.min(50, rawRows.length); i++) {
+          const row = rawRows[i];
+          if (!Array.isArray(row)) continue;
+          
+          // Find User Column (Check prioritized list)
+          const uIdx = row.findIndex(c => {
+            if (!c) return false;
+            const cleanCell = String(c).toLowerCase().trim();
+            return userAliases.some(alias => cleanCell === alias || cleanCell.includes(alias));
+          });
 
-           const pIdx = row.findIndex(cell => cell && typeof cell === 'string' && possibleProjectNames.some(t => cell.toLowerCase().trim() === t || cell.toLowerCase().includes(t)));
-           let dIdx = row.findIndex(cell => cell && typeof cell === 'string' && cell.toLowerCase().includes('disposition'));
-           if (dIdx === -1) {
-              dIdx = row.findIndex(cell => cell && typeof cell === 'string' && (cell.toLowerCase().includes('call result') || cell.toLowerCase().trim() === 'status'));
-           }
-
-           if (pIdx !== -1 && dIdx !== -1) {
-             headerIndex = i;
-             projectKeyIndex = pIdx;
-             dispositionKeyIndex = dIdx;
-             durationKeyIndex = row.findIndex(cell => cell && typeof cell === 'string' && possibleDurationNames.some(t => cell.toLowerCase().includes(t)));
-             break;
-           }
+          const dIdx = row.findIndex(c => c && dispAliases.some(a => String(c).toLowerCase().includes(a)));
+          
+          if (uIdx !== -1 && dIdx !== -1) {
+            headerIndex = i;
+            userColIdx = uIdx;
+            dispositionColIdx = dIdx;
+            durationColIdx = row.findIndex(c => c && durationAliases.some(a => String(c).toLowerCase().includes(a)));
+            break;
+          }
         }
 
-        if (headerIndex === -1) {
-          throw new Error("Columns not found. Ensure 'Assigned To' and 'Disposition' are present.");
-        }
+        if (headerIndex === -1) throw new Error("Required columns (Terminated on/User and Disposition) not found.");
 
-        const jsonData = utils.sheet_to_json(sheet, { range: headerIndex, raw: false, defval: "" });
+        const jsonData = utils.sheet_to_json(sheet, { range: headerIndex, raw: true, defval: "" });
         const headerRow = rawRows[headerIndex];
-        const projectKey = String(headerRow[projectKeyIndex]).trim();
-        const dispositionKey = String(headerRow[dispositionKeyIndex]).trim();
-        const durationKey = durationKeyIndex !== -1 ? String(headerRow[durationKeyIndex]).trim() : null;
-
-        const sites: Record<string, Record<string, { answered: number, missed: number, durationAnsweredRaw: number, durationMissedRaw: number }>> = {};
+        const userKey = String(headerRow[userColIdx]);
+        const dispositionKey = String(headerRow[dispositionColIdx]);
+        const durationKey = durationColIdx !== -1 ? String(headerRow[durationColIdx]) : null;
 
         const normalizedMapping: Record<string, string> = {};
-        Object.keys(USER_PROJECT_MAPPING).forEach(key => {
-          normalizedMapping[key.toLowerCase()] = USER_PROJECT_MAPPING[key];
+        Object.keys(USER_PROJECT_MAPPING).forEach(k => {
+          normalizedMapping[k.toLowerCase().trim()] = USER_PROJECT_MAPPING[k];
         });
 
+        const sites: Record<string, Record<string, any>> = {};
+
         jsonData.forEach((row: any) => {
-          if (!row) return;
-
-          const rawUser = row[projectKey];
-          if (!rawUser) return;
-          const userName = String(rawUser).trim();
+          const rawVal = row[userKey];
+          if (!rawVal) return;
+          const userStr = String(rawVal).trim();
           
-          const siteName = normalizedMapping[userName.toLowerCase()];
-          if (!siteName) return; 
+          // Fuzzy match against our known user list
+          const userLower = userStr.toLowerCase();
+          const matchedUserKey = Object.keys(normalizedMapping).find(k => {
+             // Exact match or contains (to handle 'Agent - Name' or variations)
+             return userLower === k || userLower.includes(k) || k.includes(userLower);
+          });
 
-          const disposition = String(row[dispositionKey] || '').trim();
-          const durationVal = durationKey ? row[durationKey] : 0;
-          const durationRaw = parseDurationRaw(durationVal);
+          if (!matchedUserKey) return;
+
+          const siteName = normalizedMapping[matchedUserKey];
+          const disposition = row[dispositionKey];
+          const durationRaw = durationKey ? parseDurationRaw(row[durationKey]) : 0;
 
           if (!sites[siteName]) sites[siteName] = {};
-          if (!sites[siteName][userName]) {
-            sites[siteName][userName] = { 
-              answered: 0, 
-              missed: 0, 
-              durationAnsweredRaw: 0, 
-              durationMissedRaw: 0 
+          if (!sites[siteName][matchedUserKey]) {
+            // Find original casing for display
+            const originalName = Object.keys(USER_PROJECT_MAPPING).find(k => k.toLowerCase() === matchedUserKey) || matchedUserKey;
+            sites[siteName][matchedUserKey] = { 
+              displayName: originalName,
+              answered: 0, missed: 0, durAns: 0, durMiss: 0 
             };
           }
 
-          const stats = sites[siteName][userName];
-          
+          const stats = sites[siteName][matchedUserKey];
           if (isAnswered(disposition)) {
-            stats.answered += 1;
-            stats.durationAnsweredRaw += durationRaw;
+            stats.answered++;
+            stats.durAns += durationRaw;
           } else {
-            stats.missed += 1;
-            stats.durationMissedRaw += durationRaw;
+            stats.missed++;
+            stats.durMiss += durationRaw;
           }
         });
 
-        const siteNames = Object.keys(sites);
-        if (siteNames.length === 0) throw new Error("No data found for the predefined users.");
-
+        const reportDate = extractDateFromFilename(file.name);
         const images: GeneratedImage[] = [];
         const zip = new JSZip();
 
-        for (const site of siteNames) {
+        const siteKeys = Object.keys(sites);
+        if (siteKeys.length === 0) throw new Error("No matching users from the mapping found in the data. Please check the 'Terminated on' column content.");
+
+        for (const site of siteKeys) {
           const userStats = sites[site];
-          const rows: any[] = [];
+          const rows = Object.values(userStats).map((s: any) => {
+            const totalSec = s.durAns + s.durMiss;
+            const avgSec = s.answered > 0 ? (s.durAns / s.answered) : 0;
+            return {
+              "User Name": `User - ${s.displayName}`,
+              "Answered": s.answered,
+              "Call Duration (Answered)": formatWithHourLogic(s.durAns),
+              "Missed": s.missed,
+              "Call Duration (Missed)": formatWithHourLogic(s.durMiss),
+              "Total Call Duration": formatWithHourLogic(totalSec),
+              "Total Count": s.answered + s.missed,
+              "Average Call": `${Math.floor(avgSec / 60)}:${Math.floor(avgSec % 60).toString().padStart(2, '0')}`,
+              "rawTotal": totalSec
+            };
+          }).sort((a, b) => b.rawTotal - a.rawTotal);
 
-          Object.keys(userStats).forEach(user => {
-            const stat = userStats[user];
-            const totalSeconds = stat.durationAnsweredRaw + stat.durationMissedRaw;
-
-            // Apply hour logic to formatted durations
-            const displayAnsweredDur = formatWithHourLogic(stat.durationAnsweredRaw);
-            const displayMissedDur = formatWithHourLogic(stat.durationMissedRaw);
-            const displayTotalDur = formatWithHourLogic(totalSeconds);
-            
-            const totalCount = stat.answered + stat.missed;
-            
-            // Average call duration remains in M:SS
-            const avgCallSeconds = stat.answered > 0 ? (stat.durationAnsweredRaw / stat.answered) : 0;
-            const avgM = Math.floor(avgCallSeconds / 60);
-            const avgS = Math.floor(avgCallSeconds % 60);
-            const avgDisplay = `${avgM}:${avgS.toString().padStart(2, '0')}`;
-            
-            rows.push({
-              "User Name": `User - ${user}`,
-              "Answered": stat.answered,
-              "Call Duration (Answered)": displayAnsweredDur,
-              "Missed": stat.missed,
-              "Call Duration (Missed)": displayMissedDur,
-              "Total Call Duration": displayTotalDur,
-              "Total Count": totalCount,
-              "Average Call": avgDisplay,
-              "rawTotalSeconds": totalSeconds
-            });
-          });
-
-          rows.sort((a, b) => b.rawTotalSeconds - a.rawTotalSeconds);
-
-          const dataUrl = await generateTableImage(site, rows);
-          if (!dataUrl) continue;
-
-          const cleanName = site.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-          const filename = `${cleanName}_summary.png`;
-
-          images.push({
-            project_name: site,
-            image_url: dataUrl,
-            filename: filename
-          });
-
+          const dataUrl = await generateTableImage(site, rows, reportDate);
+          const filename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_summary.png`;
+          images.push({ project_name: site, image_url: dataUrl, filename });
           zip.file(filename, dataUrl.split(',')[1], { base64: true });
         }
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
-        const zipUrl = URL.createObjectURL(zipBlob);
-
-        resolve({ images, zip_url: zipUrl, message: "Success" });
-
+        resolve({ images, zip_url: URL.createObjectURL(zipBlob), message: "Success" });
       } catch (err: any) {
-        console.error("Processing Error:", err);
         reject(err);
       }
     };
-    
-    reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsArrayBuffer(file);
   });
 }
