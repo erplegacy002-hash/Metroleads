@@ -7,7 +7,7 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
 // --- Configuration ---
 
 /**
- * Categorizes a call status. 
+ * Categorizes a call status from the 'Disposition' column. 
  * If it matches known success keywords, it's Answered.
  * Otherwise, it's counted as Missed (ensuring total count is accurate).
  */
@@ -15,17 +15,19 @@ function isAnswered(status: any): boolean {
   if (status === null || status === undefined) return false;
   const s = String(status).toLowerCase().trim();
   
-  // Explicit "Answered" markers
+  // Explicit "Answered" markers commonly found in calling software
   const answeredKeywords = [
     'connected', 'talked', 'answer', 'converted', 'sale', 
-    'interested', 'visit', 'meeting', 'demo', 'deal', 'follow'
+    'interested', 'visit', 'meeting', 'demo', 'deal', 'follow',
+    'success', 'picked'
   ];
 
   const matchesAnswered = answeredKeywords.some(kw => s.includes(kw));
   
-  // Ensure we don't treat "Not Answered" as Answered
+  // Ensure we don't treat negative outcomes like "not answered" as Answered
   if (matchesAnswered) {
     const isFalsePositive = s.includes('not ') || s.includes('no ');
+    // If it says "connected" but also "not", we check if "connected" is the primary intent
     if (isFalsePositive && !s.includes('connected')) return false;
     return true;
   }
@@ -84,6 +86,9 @@ function extractDateFromFilename(filename: string): string {
   }).toUpperCase();
 }
 
+/**
+ * Formats seconds into a string using 'hour logic'.
+ */
 function formatWithHourLogic(totalSeconds: number): string {
   if (totalSeconds >= 3600) {
     const h = Math.floor(totalSeconds / 3600);
@@ -141,8 +146,8 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Call Duration (Answered)']}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Missed']}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Call Duration (Missed)']}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Total Call Duration']}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Total Count']}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 400;">${row['Total Call Duration']}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 600;">${row['Total Count']}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Average Call']}</td>
     </tr>
   `).join('');
@@ -181,6 +186,7 @@ export async function processFile(file: File): Promise<ProcessResponse> {
     reader.onload = async (e) => {
       try {
         const data = e.target?.result;
+        // CellNF: true and CellFormula: true enable 'editing mode' values
         const workbook = read(data, { type: 'array', cellDates: true, cellNF: true, cellFormula: true });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rawRows = utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
@@ -191,9 +197,8 @@ export async function processFile(file: File): Promise<ProcessResponse> {
         let headerIndex = -1;
         let userColIdx = -1, dispositionColIdx = -1, durationColIdx = -1;
 
-        // "Terminated on" is prioritized for the username as requested.
-        // We REMOVE 'project name' from userAliases to ensure it doesn't pick that up instead.
-        const userAliases = ['terminated on', 'assigned to', 'user', 'agent', 'employee'];
+        // "Terminated on" is the prioritized target for identifying the agent/user.
+        const userAliases = ['terminated on', 'assigned to', 'agent', 'user', 'employee'];
         const durationAliases = ['duration', 'talk time', 'bill sec', 'call duration', 'time'];
         const dispAliases = ['disposition', 'status', 'call result', 'result'];
 
@@ -201,14 +206,20 @@ export async function processFile(file: File): Promise<ProcessResponse> {
           const row = rawRows[i];
           if (!Array.isArray(row)) continue;
           
-          // Find User Column (Check prioritized list)
+          // Identify the 'Terminated on' column specifically
           const uIdx = row.findIndex(c => {
             if (!c) return false;
             const cleanCell = String(c).toLowerCase().trim();
-            return userAliases.some(alias => cleanCell === alias || cleanCell.includes(alias));
+            // Explicit check for 'Terminated on' first
+            return cleanCell === 'terminated on' || cleanCell.includes('terminated on');
           });
 
-          const dIdx = row.findIndex(c => c && dispAliases.some(a => String(c).toLowerCase().includes(a)));
+          // Identify Disposition
+          const dIdx = row.findIndex(c => {
+            if (!c) return false;
+            const cleanCell = String(c).toLowerCase().trim();
+            return cleanCell === 'disposition' || cleanCell.includes('disposition');
+          });
           
           if (uIdx !== -1 && dIdx !== -1) {
             headerIndex = i;
@@ -219,7 +230,24 @@ export async function processFile(file: File): Promise<ProcessResponse> {
           }
         }
 
-        if (headerIndex === -1) throw new Error("Required columns (Terminated on/User and Disposition) not found.");
+        // Fallback if strict 'Terminated on' wasn't found - search more broadly
+        if (headerIndex === -1) {
+           for (let i = 0; i < Math.min(50, rawRows.length); i++) {
+            const row = rawRows[i];
+            if (!Array.isArray(row)) continue;
+            const uIdx = row.findIndex(c => c && userAliases.some(a => String(c).toLowerCase().trim() === a || String(c).toLowerCase().includes(a)));
+            const dIdx = row.findIndex(c => c && dispAliases.some(a => String(c).toLowerCase().includes(a)));
+            if (uIdx !== -1 && dIdx !== -1) {
+              headerIndex = i;
+              userColIdx = uIdx;
+              dispositionColIdx = dIdx;
+              durationColIdx = row.findIndex(c => c && durationAliases.some(a => String(c).toLowerCase().includes(a)));
+              break;
+            }
+          }
+        }
+
+        if (headerIndex === -1) throw new Error("Could not find 'Terminated on' or 'Disposition' columns.");
 
         const jsonData = utils.sheet_to_json(sheet, { range: headerIndex, raw: true, defval: "" });
         const headerRow = rawRows[headerIndex];
@@ -236,13 +264,13 @@ export async function processFile(file: File): Promise<ProcessResponse> {
 
         jsonData.forEach((row: any) => {
           const rawVal = row[userKey];
-          if (!rawVal) return;
+          if (rawVal === undefined || rawVal === null) return;
           const userStr = String(rawVal).trim();
+          if (!userStr) return;
           
           // Fuzzy match against our known user list
           const userLower = userStr.toLowerCase();
           const matchedUserKey = Object.keys(normalizedMapping).find(k => {
-             // Exact match or contains (to handle 'Agent - Name' or variations)
              return userLower === k || userLower.includes(k) || k.includes(userLower);
           });
 
@@ -254,7 +282,6 @@ export async function processFile(file: File): Promise<ProcessResponse> {
 
           if (!sites[siteName]) sites[siteName] = {};
           if (!sites[siteName][matchedUserKey]) {
-            // Find original casing for display
             const originalName = Object.keys(USER_PROJECT_MAPPING).find(k => k.toLowerCase() === matchedUserKey) || matchedUserKey;
             sites[siteName][matchedUserKey] = { 
               displayName: originalName,
@@ -263,6 +290,10 @@ export async function processFile(file: File): Promise<ProcessResponse> {
           }
 
           const stats = sites[siteName][matchedUserKey];
+          
+          // ENSURE ALL ROWS ARE COUNTED
+          // If isAnswered returns true, it's Answered. 
+          // OTHERWISE, it's Missed. This ensures total count = answered + missed = total rows.
           if (isAnswered(disposition)) {
             stats.answered++;
             stats.durAns += durationRaw;
@@ -277,13 +308,15 @@ export async function processFile(file: File): Promise<ProcessResponse> {
         const zip = new JSZip();
 
         const siteKeys = Object.keys(sites);
-        if (siteKeys.length === 0) throw new Error("No matching users from the mapping found in the data. Please check the 'Terminated on' column content.");
+        if (siteKeys.length === 0) throw new Error("No matching users found in the 'Terminated on' column. Please check if the names match the project mapping.");
 
         for (const site of siteKeys) {
           const userStats = sites[site];
           const rows = Object.values(userStats).map((s: any) => {
             const totalSec = s.durAns + s.durMiss;
             const avgSec = s.answered > 0 ? (s.durAns / s.answered) : 0;
+            const totalCount = s.answered + s.missed;
+
             return {
               "User Name": `User - ${s.displayName}`,
               "Answered": s.answered,
@@ -291,7 +324,7 @@ export async function processFile(file: File): Promise<ProcessResponse> {
               "Missed": s.missed,
               "Call Duration (Missed)": formatWithHourLogic(s.durMiss),
               "Total Call Duration": formatWithHourLogic(totalSec),
-              "Total Count": s.answered + s.missed,
+              "Total Count": totalCount,
               "Average Call": `${Math.floor(avgSec / 60)}:${Math.floor(avgSec % 60).toString().padStart(2, '0')}`,
               "rawTotal": totalSec
             };
