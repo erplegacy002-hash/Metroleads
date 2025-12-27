@@ -63,27 +63,52 @@ function parseDurationRaw(val: any): number {
 }
 
 /**
- * Extracts a date from filename in format YYYY-MM-DD
+ * Parses and formats a date value (string, number, or Date object)
+ * Returns string in DD MMM YYYY format (e.g., 26 DEC 2025)
  */
-function extractDateFromFilename(filename: string): string {
-  const datePattern = /(\d{4})-(\d{2})-(\d{2})/;
-  const match = filename.match(datePattern);
-  
-  if (match) {
-    const [_, year, month, day] = match;
-    const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    return dateObj.toLocaleDateString('en-GB', {
+function parseAndFormatDate(val: any): string | null {
+  if (!val) return null;
+  let date: Date | undefined;
+
+  if (val instanceof Date) {
+    date = val;
+  } else if (typeof val === 'number') {
+    // Excel serial date (approximate)
+    // 25569 is offset between 1900-01-01 and 1970-01-01
+    date = new Date(Math.round((val - 25569) * 86400 * 1000));
+  } else if (typeof val === 'string') {
+    const v = val.trim();
+    
+    // Check for DD/MM/YY or DD/MM/YYYY format specifically (e.g. 25/12/25)
+    // Regex matches starts with DD/MM/YY or DD/MM/YYYY, optionally followed by time
+    const dmyMatch = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    
+    if (dmyMatch) {
+      const day = parseInt(dmyMatch[1], 10);
+      const month = parseInt(dmyMatch[2], 10) - 1; // JS months are 0-indexed
+      let year = parseInt(dmyMatch[3], 10);
+      
+      // Handle 2 digit years (assume 2000s)
+      if (year < 100) year += 2000;
+      
+      date = new Date(year, month, day);
+    } else {
+      // Try standard parsing
+      const d = new Date(v);
+      if (!isNaN(d.getTime())) {
+        date = d;
+      }
+    }
+  }
+
+  if (date && !isNaN(date.getTime())) {
+    return date.toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',
       year: 'numeric'
     }).toUpperCase();
   }
-
-  return new Date().toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  }).toUpperCase();
+  return null;
 }
 
 /**
@@ -195,12 +220,13 @@ export async function processFile(file: File): Promise<ProcessResponse> {
 
         // Detect Columns
         let headerIndex = -1;
-        let userColIdx = -1, dispositionColIdx = -1, durationColIdx = -1;
+        let userColIdx = -1, dispositionColIdx = -1, durationColIdx = -1, dateColIdx = -1;
 
         // "Terminated on" is the prioritized target for identifying the agent/user.
         const userAliases = ['terminated on', 'assigned to', 'agent', 'user', 'employee'];
         const durationAliases = ['duration', 'talk time', 'bill sec', 'call duration', 'time'];
         const dispAliases = ['disposition', 'status', 'call result', 'result'];
+        const dateAliases = ['call date', 'date', 'call_date', 'calldate'];
 
         for (let i = 0; i < Math.min(50, rawRows.length); i++) {
           const row = rawRows[i];
@@ -226,6 +252,7 @@ export async function processFile(file: File): Promise<ProcessResponse> {
             userColIdx = uIdx;
             dispositionColIdx = dIdx;
             durationColIdx = row.findIndex(c => c && durationAliases.some(a => String(c).toLowerCase().includes(a)));
+            dateColIdx = row.findIndex(c => c && dateAliases.some(a => String(c).toLowerCase().trim() === a || String(c).toLowerCase().includes(a)));
             break;
           }
         }
@@ -242,6 +269,7 @@ export async function processFile(file: File): Promise<ProcessResponse> {
               userColIdx = uIdx;
               dispositionColIdx = dIdx;
               durationColIdx = row.findIndex(c => c && durationAliases.some(a => String(c).toLowerCase().includes(a)));
+              dateColIdx = row.findIndex(c => c && dateAliases.some(a => String(c).toLowerCase().trim() === a || String(c).toLowerCase().includes(a)));
               break;
             }
           }
@@ -254,6 +282,7 @@ export async function processFile(file: File): Promise<ProcessResponse> {
         const userKey = String(headerRow[userColIdx]);
         const dispositionKey = String(headerRow[dispositionColIdx]);
         const durationKey = durationColIdx !== -1 ? String(headerRow[durationColIdx]) : null;
+        const dateKey = dateColIdx !== -1 ? String(headerRow[dateColIdx]) : null;
 
         const normalizedMapping: Record<string, string> = {};
         Object.keys(USER_PROJECT_MAPPING).forEach(k => {
@@ -261,8 +290,15 @@ export async function processFile(file: File): Promise<ProcessResponse> {
         });
 
         const sites: Record<string, Record<string, any>> = {};
+        let detectedDate: string | null = null;
 
         jsonData.forEach((row: any) => {
+          // Try to grab date from the first available row in "Call Date" column
+          // We only take the first valid date we find
+          if (!detectedDate && dateKey && row[dateKey]) {
+            detectedDate = parseAndFormatDate(row[dateKey]);
+          }
+
           const rawVal = row[userKey];
           if (rawVal === undefined || rawVal === null) return;
           const userStr = String(rawVal).trim();
@@ -291,9 +327,6 @@ export async function processFile(file: File): Promise<ProcessResponse> {
 
           const stats = sites[siteName][matchedUserKey];
           
-          // ENSURE ALL ROWS ARE COUNTED
-          // If isAnswered returns true, it's Answered. 
-          // OTHERWISE, it's Missed. This ensures total count = answered + missed = total rows.
           if (isAnswered(disposition)) {
             stats.answered++;
             stats.durAns += durationRaw;
@@ -303,7 +336,10 @@ export async function processFile(file: File): Promise<ProcessResponse> {
           }
         });
 
-        const reportDate = extractDateFromFilename(file.name);
+        // Use ONLY detected date from "Call Date" column.
+        // If not found, use a placeholder or empty string to indicate missing data.
+        const reportDate = detectedDate || "DATE MISSING"; 
+
         const images: GeneratedImage[] = [];
         const zip = new JSZip();
 
