@@ -126,15 +126,25 @@ function formatWithHourLogic(totalSeconds: number): string {
   }
 }
 
+/**
+ * Formats seconds into "X hrs Y mins" format.
+ */
+function formatHrsMins(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  return `${h} hrs ${m} mins`;
+}
+
 // --- Image Generation ---
 
 async function generateTableImage(siteName: string, rows: any[], displayDate: string): Promise<string> {
   const container = document.createElement('div');
+  // Widen the container slightly to accommodate the new column
   Object.assign(container.style, {
     position: 'fixed',
     top: '0',
     left: '0',
-    width: '780px', 
+    width: '850px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
     fontFamily: 'sans-serif',
@@ -148,7 +158,7 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
   const displayHeaders = [
     "User Name", "Answered", "Call Duration (Answered)", 
     "Missed", "Call Duration (Missed)", "Total Call Duration", 
-    "Total Count", "Average Call"
+    "Total Count", "Average Call", "Total Tentative Working Hours"
   ];
 
   const headerHtml = displayHeaders.map(h => {
@@ -157,6 +167,8 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
       formattedHeader = h.replace(' (', '<br/>(');
     } else if (h === "Total Call Duration") {
       formattedHeader = "Total Call<br/>Duration";
+    } else if (h === "Total Tentative Working Hours") {
+      formattedHeader = "Total Tentative<br/>Working Hours";
     }
     const alignment = h === "User Name" ? 'left' : 'center';
     return `<th style="padding: 6px 4px; text-align: ${alignment}; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; vertical-align: bottom; line-height: 1.1;">
@@ -174,17 +186,21 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 400;">${row['Total Call Duration']}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 600;">${row['Total Count']}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Average Call']}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 600;">${row['Total Tentative Working Hours']}</td>
     </tr>
   `).join('');
 
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
-      <div style="padding: 12px 15px; background-color: #ffffff; text-align: center; border-bottom: 1px solid #000000;">
+      <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
         <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">CALLING REPORT</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 12px; font-weight: 700; color: #000000;">${displayDate}</div>
+      </div>
+      <div style="padding: 4px 8px 2px 8px; text-align: right; font-size: 9px; color: #000000; font-weight: 500;">
+        *Process time = 3 mins
       </div>
       <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
         <thead><tr>${headerHtml}</tr></thead>
@@ -352,6 +368,11 @@ export async function processFile(file: File): Promise<ProcessResponse> {
             const totalSec = s.durAns + s.durMiss;
             const avgSec = s.answered > 0 ? (s.durAns / s.answered) : 0;
             const totalCount = s.answered + s.missed;
+            
+            // Tentative Working Hours Calculation
+            // Formula: (Total Count * 2.5 minutes) + Total Call Duration
+            // 2.5 minutes = 150 seconds
+            const tentativeSec = (totalCount * 180) + totalSec;
 
             return {
               "User Name": `User - ${s.displayName}`,
@@ -362,6 +383,7 @@ export async function processFile(file: File): Promise<ProcessResponse> {
               "Total Call Duration": formatWithHourLogic(totalSec),
               "Total Count": totalCount,
               "Average Call": `${Math.floor(avgSec / 60)}:${Math.floor(avgSec % 60).toString().padStart(2, '0')}`,
+              "Total Tentative Working Hours": formatHrsMins(tentativeSec),
               "rawTotal": totalSec
             };
           }).sort((a, b) => b.rawTotal - a.rawTotal);
