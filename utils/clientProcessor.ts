@@ -158,7 +158,7 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
   const displayHeaders = [
     "User Name", "Answered", "Call Duration (Answered)", 
     "Missed", "Call Duration (Missed)", "Total Call Duration", 
-    "Total Count", "Average Call", "Total Tentative Working Hours"
+    "Total Count", "Average Call", "Total Tentative Hours"
   ];
 
   const headerHtml = displayHeaders.map(h => {
@@ -167,8 +167,8 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
       formattedHeader = h.replace(' (', '<br/>(');
     } else if (h === "Total Call Duration") {
       formattedHeader = "Total Call<br/>Duration";
-    } else if (h === "Total Tentative Working Hours") {
-      formattedHeader = "Total Tentative<br/>Working Hours";
+    } else if (h === "Total Tentative Hours") {
+      formattedHeader = "Total Tentative<br/>Hours";
     }
     const alignment = h === "User Name" ? 'left' : 'center';
     return `<th style="padding: 6px 4px; text-align: ${alignment}; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; vertical-align: bottom; line-height: 1.1;">
@@ -186,7 +186,7 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 400;">${row['Total Call Duration']}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 600;">${row['Total Count']}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row['Average Call']}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 600;">${row['Total Tentative Working Hours']}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 600;">${row['Total Tentative Hours']}</td>
     </tr>
   `).join('');
 
@@ -383,7 +383,7 @@ export async function processFile(file: File): Promise<ProcessResponse> {
               "Total Call Duration": formatWithHourLogic(totalSec),
               "Total Count": totalCount,
               "Average Call": `${Math.floor(avgSec / 60)}:${Math.floor(avgSec % 60).toString().padStart(2, '0')}`,
-              "Total Tentative Working Hours": formatHrsMins(tentativeSec),
+              "Total Tentative Hours": formatHrsMins(tentativeSec),
               "rawTotal": totalSec
             };
           }).sort((a, b) => b.rawTotal - a.rawTotal);
