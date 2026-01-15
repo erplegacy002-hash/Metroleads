@@ -200,7 +200,7 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
         <div style="font-size: 12px; font-weight: 700; color: #000000;">${displayDate}</div>
       </div>
       <div style="padding: 4px 8px 2px 8px; text-align: right; font-size: 9px; color: #000000; font-weight: 500;">
-        *Process time = 2 mins
+        *Process time = 1.5 mins
       </div>
       <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
         <thead><tr>${headerHtml}</tr></thead>
@@ -370,9 +370,9 @@ export async function processFile(file: File): Promise<ProcessResponse> {
             const totalCount = s.answered + s.missed;
             
             // Tentative Working Hours Calculation
-            // Formula: (Total Count * 2.5 minutes) + Total Call Duration
-            // 2.5 minutes = 150 seconds
-            const tentativeSec = (totalCount * 120) + totalSec;
+            // Formula: (Total Count * 1.5 minutes) + Total Call Duration
+            // 1.5 minutes = 90 seconds
+            const tentativeSec = (totalCount * 90) + totalSec;
 
             return {
               "User Name": `User - ${s.displayName}`,
