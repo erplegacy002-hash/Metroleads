@@ -2,11 +2,11 @@ import { read, utils } from 'xlsx';
 import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
 import { GeneratedImage, ProcessResponse } from '../types';
-import { USER_PROJECT_MAPPING } from './projectMapping';
+import { USER_PROJECT_MAPPING, DEFAULT_SITE } from './projectMapping';
 
 // --- Helpers ---
 
-function parseAndFormatDate(val: any): string | null {
+function parseDate(val: any): Date | null {
   if (!val) return null;
   let date: Date | undefined;
 
@@ -17,41 +17,101 @@ function parseAndFormatDate(val: any): string | null {
     date = new Date(Math.round((val - 25569) * 86400 * 1000));
   } else if (typeof val === 'string') {
     const v = val.trim();
-    // Try DD/MM/YYYY
-    const dmyMatch = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-    if (dmyMatch) {
-      const day = parseInt(dmyMatch[1], 10);
-      const month = parseInt(dmyMatch[2], 10) - 1;
-      let year = parseInt(dmyMatch[3], 10);
-      if (year < 100) year += 2000;
-      date = new Date(year, month, day);
+    if (v.match(/^\d{4}-\d{2}-\d{2}$/)) {
+       const [y, m, d] = v.split('-').map(Number);
+       date = new Date(y, m - 1, d);
     } else {
-      const d = new Date(v);
-      if (!isNaN(d.getTime())) date = d;
+        const dmyMatch = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+        if (dmyMatch) {
+            const day = parseInt(dmyMatch[1], 10);
+            const month = parseInt(dmyMatch[2], 10) - 1;
+            let year = parseInt(dmyMatch[3], 10);
+            if (year < 100) year += 2000;
+            date = new Date(year, month, day);
+        } else {
+             // Try DD-MMM-YYYY (e.g. 12-Jan-2024)
+             const dMmmYMatch = v.match(/^(\d{1,2})[\/\-\s]([A-Za-z]{3})[\/\-\s](\d{2,4})/);
+             if (dMmmYMatch) {
+                 const day = parseInt(dMmmYMatch[1], 10);
+                 const monthStr = dMmmYMatch[2].toLowerCase();
+                 const yearStr = dMmmYMatch[3];
+                 let year = parseInt(yearStr, 10);
+                 if (year < 100) year += 2000;
+                 
+                 const months: {[key:string]: number} = {jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11};
+                 if (months[monthStr] !== undefined) {
+                     date = new Date(year, months[monthStr], day);
+                 }
+             } else {
+                const d = new Date(v);
+                if (!isNaN(d.getTime())) date = d;
+             }
+        }
     }
   }
 
   if (date && !isNaN(date.getTime())) {
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).toUpperCase();
+    date.setHours(0, 0, 0, 0); // Normalize to midnight for accurate comparison
+    return date;
   }
   return null;
 }
 
-// --- Image Generation: Daily List (No Date Column) ---
+function formatDate(date: Date): string {
+  return date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  }).toUpperCase();
+}
 
-async function generateDailyListImage(siteName: string, rows: any[], dateLabel: string): Promise<string> {
-  const container = document.createElement('div');
+function determineSource(cpData: any, sourceData: any, subSourceData: any): string {
+  // 1. If CP Firm Name exists, it is a Channel Partner
+  if (cpData && String(cpData).trim().length > 0) {
+    return 'Channel Partner';
+  }
+
+  const rawSource = sourceData ? String(sourceData).trim() : '';
+  const rawSubSource = subSourceData ? String(subSourceData).trim() : '';
+
+  const checkKeywords = (str: string): string | null => {
+    const s = str.toLowerCase();
+    if (s.includes('channel partner')) return 'Channel Partner';
+    if (s.includes('walk-in') || s.includes('walkin')) return 'Walk-In';
+    if (s.includes('digital') || s.includes('facebook') || s.includes('instagram') || s.includes('website') || s.includes('google') || s.includes('whatsapp') || s.includes('popup')) return 'Digital';
+    if (s.includes('offer')) return 'Offer';
+    if (s.includes('refer') || s.includes('referral') || s.includes('reference')) return 'Referral';
+    if (s.includes('hoarding') || s.includes('hoardings')) return 'Hoarding';
+    return null;
+  };
+
+  // 2. Check Lead Source keywords
+  if (rawSource.length > 0) {
+    const match = checkKeywords(rawSource);
+    if (match) return match;
+  }
+
+  // 3. Check Sub Source keywords
+  if (rawSubSource.length > 0) {
+    const match = checkKeywords(rawSubSource);
+    if (match) return match;
+  }
   
-  // Reduced width from 850px to 600px for a more compact look
+  // 4. Fallback: Return Lead Source if present
+  if (rawSource.length > 0) return rawSource;
+  
+  return '-';
+}
+
+// --- Image Generation: Daily List ---
+
+async function generateDailyListImage(siteName: string, rows: any[], dateLabel: string, startDate: string, endDate: string): Promise<string> {
+  const container = document.createElement('div');
   Object.assign(container.style, {
     position: 'fixed',
     top: '0',
     left: '0',
-    width: '600px', 
+    width: '1050px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
     fontFamily: 'sans-serif',
@@ -63,15 +123,25 @@ async function generateDailyListImage(siteName: string, rows: any[], dateLabel: 
   if (rows.length === 0) return '';
 
   const headerHtml = `
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 50px;">Sr. No.</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 40px;">Sr. No.</th>
     <th style="padding: 6px 4px; text-align: left; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Visitor Name</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 150px;">State</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 110px;">Source</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 150px;">CP Firm Name</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 90px;">Visit Date</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 90px;">2nd Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 90px;">3rd Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 130px;">State</th>
   `;
 
   const rowsHtml = rows.map((row, index) => `
     <tr>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${index + 1}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: left; color: #000000; font-weight: 500;">${row.name}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.source}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.cpFirmName}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date2}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date3}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.state}</td>
     </tr>
   `).join('');
@@ -79,13 +149,18 @@ async function generateDailyListImage(siteName: string, rows: any[], dateLabel: 
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">DAILY SITE VISIT REPORT</div>
+        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">SITE VISIT</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 12px; font-weight: 700; color: #000000;">${dateLabel}</div>
       </div>
-      <div style="height: 10px;"></div>
+
+      <div style="padding: 5px 2px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #000000;">
+        <span>Start Date: ${startDate}</span>
+        <span>End Date: ${endDate}</span>
+      </div>
+
       <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
         <thead><tr>${headerHtml}</tr></thead>
         <tbody>${rowsHtml}</tbody>
@@ -105,10 +180,8 @@ async function generateDailyListImage(siteName: string, rows: any[], dateLabel: 
 
 // --- Image Generation: Summary ---
 
-async function generateDailySummaryImage(siteName: string, summaryStats: Record<string, number>, dateLabel: string): Promise<string> {
+async function generateDailySummaryImage(siteName: string, summaryStats: Record<string, number>, sourceStats: Record<string, number>, dateLabel: string, startDate: string, endDate: string): Promise<string> {
   const container = document.createElement('div');
-  
-  // Smaller width for the summary card
   Object.assign(container.style, {
     position: 'fixed',
     top: '0',
@@ -122,7 +195,8 @@ async function generateDailySummaryImage(siteName: string, summaryStats: Record<
     pointerEvents: 'none'
   });
 
-  const total = Object.values(summaryStats).reduce((a, b) => a + b, 0);
+  const totalStatus = Object.values(summaryStats).reduce((a, b) => a + b, 0);
+  const totalSource = Object.values(sourceStats).reduce((a, b) => a + b, 0);
 
   const summaryRowsHtml = Object.entries(summaryStats).map(([state, count]) => `
     <tr>
@@ -131,31 +205,65 @@ async function generateDailySummaryImage(siteName: string, summaryStats: Record<
     </tr>
   `).join('');
 
+  const sourceRowsHtml = Object.entries(sourceStats).map(([source, count]) => `
+    <tr>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: left; color: #000000;">${source}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${count}</td>
+    </tr>
+  `).join('');
+
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">DAILY LEAD STATUS SUMMARY</div>
+        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 16px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 12px; font-weight: 700; color: #000000;">${dateLabel}</div>
       </div>
-      <div style="height: 15px;"></div>
-      <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
-        <thead>
-          <tr>
-            <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">State</th>
-            <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Count</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${summaryRowsHtml}
-          <tr>
-             <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; color: #000000; background-color: #f9fafb;">Total</td>
-             <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${total}</td>
-          </tr>
-        </tbody>
-      </table>
+
+      <div style="padding: 5px 2px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #000000; padding-left: 15px; padding-right: 15px;">
+        <span>Start Date: ${startDate}</span>
+        <span>End Date: ${endDate}</span>
+      </div>
+
+      <div style="padding: 15px;">
+        <!-- Lead Status Summary -->
+        <div style="font-size: 12px; font-weight: 800; color: #000000; text-transform: uppercase; margin-bottom: 6px;">LEAD STATUS SUMMARY</div>
+        <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; margin-bottom: 20px;">
+          <thead>
+            <tr>
+              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">State</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${summaryRowsHtml}
+            <tr>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; color: #000000; background-color: #f9fafb;">Total</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalStatus}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Source Summary -->
+        <div style="font-size: 12px; font-weight: 800; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
+        <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
+          <thead>
+            <tr>
+              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Source</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sourceRowsHtml}
+            <tr>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; color: #000000; background-color: #f9fafb;">Total Visits</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSource}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   `;
 
@@ -171,7 +279,15 @@ async function generateDailySummaryImage(siteName: string, summaryStats: Record<
 
 // --- Main Processor ---
 
-export async function processDailySiteVisitFile(file: File): Promise<ProcessResponse> {
+function findColumnIndex(row: any[], aliases: string[]): number {
+  for (const alias of aliases) {
+    const idx = row.findIndex(c => c && String(c).toLowerCase().trim() === alias);
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
+export async function processDailySiteVisitFile(file: File, manualStartDate?: string, manualEndDate?: string): Promise<ProcessResponse> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -185,21 +301,39 @@ export async function processDailySiteVisitFile(file: File): Promise<ProcessResp
 
         // Detect Columns
         let headerIndex = -1;
-        let nameIdx = -1, stateIdx = -1, assignedToIdx = -1, visitDateIdx = -1;
+        let nameIdx = -1, stateIdx = -1, assignedToIdx = -1;
+        let visitDateIdx = -1, visitDate2Idx = -1, visitDate3Idx = -1;
+        let cpFirmNameIdx = -1, leadSourceIdx = -1, subSourceIdx = -1;
 
-        const nameAliases = ['name', 'visitor name', 'lead name', 'customer name'];
+        // PRIORITIZE "Name" specifically
+        const nameAliases = ['name', 'visitor name', 'lead name', 'customer name', 'full name', 'client name'];
         const stateAliases = ['lead state', 'state', 'region', 'location'];
-        const assignedAliases = ['assigned to', 'assigned_to', 'owner', 'agent'];
-        const dateAliases = ['visit date', 'visit_date', 'date of visit', 'date', 'visited date'];
+        const assignedAliases = ['assigned to', 'assigned_to', 'owner', 'agent', 'executive', 'sales executive', 'allocated to', 'sales person', 'sourcing manager', 'closing manager'];
+        
+        const dateAliases = ['visit date', 'visit_date', 'date of visit', 'date', 'visited date', 'created time', 'created on', 'entry date'];
+        const date2Aliases = ['2nd visit date', 'second visit date', 'visit date 2', '2nd_visit_date'];
+        const date3Aliases = ['3rd visit date', 'third visit date', 'visit date 3', '3rd_visit_date'];
+        
+        const cpFirmAliases = ['cp firm name', 'cp firm name (v)', 'cp name', 'channel partner firm name'];
+        const leadSourceAliases = ['lead source', 'lead source (f)', 'source', 'source of lead', 'enquiry source'];
+        const subSourceAliases = ['sub source', 'sub source (u)', 'sub_source', 'subsource'];
 
-        for (let i = 0; i < Math.min(50, rawRows.length); i++) {
+        // Use new findColumnIndex logic to respect priority of aliases
+        for (let i = 0; i < Math.min(100, rawRows.length); i++) {
           const row = rawRows[i];
           if (!Array.isArray(row)) continue;
 
-          const nIdx = row.findIndex(c => c && nameAliases.some(a => String(c).toLowerCase().trim() === a));
-          const sIdx = row.findIndex(c => c && stateAliases.some(a => String(c).toLowerCase().trim() === a));
-          const aIdx = row.findIndex(c => c && assignedAliases.some(a => String(c).toLowerCase().trim() === a));
-          const dIdx = row.findIndex(c => c && dateAliases.some(a => String(c).toLowerCase().trim() === a));
+          const nIdx = findColumnIndex(row, nameAliases);
+          const sIdx = findColumnIndex(row, stateAliases);
+          const aIdx = findColumnIndex(row, assignedAliases);
+          
+          const dIdx = findColumnIndex(row, dateAliases);
+          const d2Idx = findColumnIndex(row, date2Aliases);
+          const d3Idx = findColumnIndex(row, date3Aliases);
+          
+          const cpIdx = findColumnIndex(row, cpFirmAliases);
+          const lsIdx = findColumnIndex(row, leadSourceAliases);
+          const ssIdx = findColumnIndex(row, subSourceAliases);
 
           if (nIdx !== -1 && aIdx !== -1) {
             headerIndex = i;
@@ -207,28 +341,20 @@ export async function processDailySiteVisitFile(file: File): Promise<ProcessResp
             stateIdx = sIdx;
             assignedToIdx = aIdx;
             visitDateIdx = dIdx;
+            visitDate2Idx = d2Idx;
+            visitDate3Idx = d3Idx;
+            cpFirmNameIdx = cpIdx;
+            leadSourceIdx = lsIdx;
+            subSourceIdx = ssIdx;
             break;
           }
         }
 
         if (headerIndex === -1) throw new Error("Could not find required columns (Name, Assigned To, etc).");
 
-        // --- EXTRACT DATE FROM FIRST ROW ---
-        // We do this immediately to find the report date
-        let reportDateStr = "";
-        if (visitDateIdx !== -1) {
-            // Find the first non-empty date starting from data rows
-            for (let i = headerIndex + 1; i < rawRows.length; i++) {
-                const row = rawRows[i];
-                if (!row) continue;
-                const val = row[visitDateIdx];
-                const formatted = parseAndFormatDate(val);
-                if (formatted) {
-                    reportDateStr = formatted;
-                    break; 
-                }
-            }
-        }
+        // Parse Manual Dates
+        const startFilter = manualStartDate ? parseDate(manualStartDate) : null;
+        const endFilter = manualEndDate ? parseDate(manualEndDate) : null;
 
         // Process Data
         const normalizedMapping: Record<string, string> = {};
@@ -242,40 +368,82 @@ export async function processDailySiteVisitFile(file: File): Promise<ProcessResp
           const row = rawRows[i];
           if (!row || row.length === 0) continue;
 
+          // RELAXED CHECK: If Assigned To is empty, treat as "Unassigned"
           const rawAssigned = row[assignedToIdx];
-          if (!rawAssigned) continue;
-          
-          const assignedStr = String(rawAssigned).trim();
+          const assignedStr = rawAssigned ? String(rawAssigned).trim() : "Unassigned";
           const assignedLower = assignedStr.toLowerCase();
 
           // Fuzzy match / Check mapping
-          const matchedUserKey = Object.keys(normalizedMapping).find(k => {
+          let matchedUserKey = Object.keys(normalizedMapping).find(k => {
             return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
           });
 
-          if (!matchedUserKey) continue;
-
-          const siteName = normalizedMapping[matchedUserKey];
-          const name = row[nameIdx] ? String(row[nameIdx]).trim() : '-';
-          
-          // --- Filter: Ignore "Test" names ---
-          if (name.toLowerCase() === 'test') continue;
-
-          let state = (stateIdx !== -1 && row[stateIdx]) ? String(row[stateIdx]).trim() : '-';
-          
-          // --- Format: Handle "re_visit_done" ---
-          if (state.toLowerCase() === 're_visit_done') {
-            state = 'Revisit Done';
+          // Fallback if not found: use DEFAULT_SITE or group under "General"
+          let siteName = DEFAULT_SITE;
+          if (matchedUserKey) {
+            siteName = normalizedMapping[matchedUserKey];
           }
 
-          // --- Filter: Ignore "Booked" state ---
+          const name = row[nameIdx] ? String(row[nameIdx]).trim() : '-';
+          const nameLower = name.toLowerCase();
+          // Filter if name contains 'test'
+          if (nameLower.includes('test')) continue;
+
+          let state = (stateIdx !== -1 && row[stateIdx]) ? String(row[stateIdx]).trim() : '-';
+          if (state.toLowerCase() === 're_visit_done') state = 'Revisit Done';
           if (state.toLowerCase() === 'booked') continue;
+
+          // --- Date Logic ---
+          // 1. Extract dates from columns
+          const d1 = visitDateIdx !== -1 ? parseDate(row[visitDateIdx]) : null;
+          const d2 = visitDate2Idx !== -1 ? parseDate(row[visitDate2Idx]) : null;
+          const d3 = visitDate3Idx !== -1 ? parseDate(row[visitDate3Idx]) : null;
+
+          let selectedDate: Date | null = null;
+
+          // 2. Filter logic
+          if (startFilter && endFilter) {
+              const datesToCheck = [d1, d2, d3].filter(d => d !== null) as Date[];
+              // Keep dates within range
+              const datesInRange = datesToCheck.filter(d => d >= startFilter && d <= endFilter);
+              
+              if (datesInRange.length === 0) {
+                  // No dates in range, skip this record entirely
+                  continue; 
+              }
+              
+              // Sort descending to get latest
+              datesInRange.sort((a,b) => b.getTime() - a.getTime());
+              selectedDate = datesInRange[0];
+          } else {
+              // No manual range provided
+              // Default to latest available date among the columns
+              const datesToCheck = [d1, d2, d3].filter(d => d !== null) as Date[];
+              if (datesToCheck.length > 0) {
+                   datesToCheck.sort((a,b) => b.getTime() - a.getTime());
+                   selectedDate = datesToCheck[0];
+              }
+          }
+
+          // --- Determine Source ---
+          const cpData = cpFirmNameIdx !== -1 ? row[cpFirmNameIdx] : null;
+          const leadSourceData = leadSourceIdx !== -1 ? row[leadSourceIdx] : null;
+          const subSourceData = subSourceIdx !== -1 ? row[subSourceIdx] : null;
+          
+          const source = determineSource(cpData, leadSourceData, subSourceData);
+          const cpFirmName = cpData ? String(cpData).trim() : '-';
 
           if (!sites[siteName]) sites[siteName] = [];
           
           sites[siteName].push({
             name,
-            state
+            state,
+            source,
+            cpFirmName,
+            date: d1 ? formatDate(d1) : '-',
+            date2: d2 ? formatDate(d2) : '-',
+            date3: d3 ? formatDate(d3) : '-',
+            rawDateVal: selectedDate 
           });
         }
 
@@ -283,30 +451,59 @@ export async function processDailySiteVisitFile(file: File): Promise<ProcessResp
         const zip = new JSZip();
         const siteKeys = Object.keys(sites);
 
-        if (siteKeys.length === 0) throw new Error("No matching records found based on Project Mapping.");
+        if (siteKeys.length === 0) throw new Error("No matching records found. Either no data matched the project mapping, or no visits fell within the selected date range.");
+
+        // Format Manual Dates for Header
+        const manualStartFormatted = startFilter ? formatDate(startFilter) : null;
+        const manualEndFormatted = endFilter ? formatDate(endFilter) : null;
 
         for (const site of siteKeys) {
           const rows = sites[site];
           
-          // Sort rows by State (Alphabetical)
+          // Determine auto range from data
+          rows.sort((a, b) => {
+            const da = a.rawDateVal;
+            const db = b.rawDateVal;
+            if (!da) return 1;
+            if (!db) return -1;
+            return da > db ? 1 : -1;
+          });
+
+          const startDateVal = rows.length > 0 ? rows[0].rawDateVal : null;
+          const endDateVal = rows.length > 0 ? rows[rows.length - 1].rawDateVal : null;
+          
+          const autoStartDateStr = startDateVal ? formatDate(startDateVal) : "-";
+          const autoEndDateStr = endDateVal ? formatDate(endDateVal) : "-";
+          
+          // Display Strings
+          const finalStartDateStr = manualStartFormatted || autoStartDateStr;
+          const finalEndDateStr = manualEndFormatted || autoEndDateStr;
+
+          // Now sort rows by State (Alphabetical) for display
           rows.sort((a, b) => a.state.localeCompare(b.state));
 
-          // Calculate Summary Stats (State -> Count)
           const summaryStats: Record<string, number> = {};
+          const sourceStats: Record<string, number> = {};
+
           rows.forEach(r => {
              const s = r.state;
              summaryStats[s] = (summaryStats[s] || 0) + 1;
+
+             const src = r.source;
+             sourceStats[src] = (sourceStats[src] || 0) + 1;
           });
 
+          // Header Label
+          const dateLabel = "DAILY REPORT";
+
           // 1. Generate Daily List Image
-          // We pass reportDateStr (extracted from the first valid row) as the dateLabel
-          const listDataUrl = await generateDailyListImage(site, rows, reportDateStr);
+          const listDataUrl = await generateDailyListImage(site, rows, dateLabel, finalStartDateStr, finalEndDateStr);
           const listFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_daily_visit.png`;
           images.push({ project_name: site, image_url: listDataUrl, filename: listFilename });
           zip.file(listFilename, listDataUrl.split(',')[1], { base64: true });
 
           // 2. Generate Daily Summary Image
-          const summaryDataUrl = await generateDailySummaryImage(site, summaryStats, reportDateStr);
+          const summaryDataUrl = await generateDailySummaryImage(site, summaryStats, sourceStats, dateLabel, finalStartDateStr, finalEndDateStr);
           const summaryFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_daily_summary.png`;
           images.push({ project_name: `Summary - ${site}`, image_url: summaryDataUrl, filename: summaryFilename });
           zip.file(summaryFilename, summaryDataUrl.split(',')[1], { base64: true });

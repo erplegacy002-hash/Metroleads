@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Loader2, Download, AlertCircle, FileText, MapPin, CalendarRange, CalendarDays } from 'lucide-react';
+import { Loader2, Download, AlertCircle, FileText, MapPin, CalendarRange, CalendarDays, Calendar } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import ImageGallery from './components/ImageGallery';
 import { ProcessResponse } from './types';
@@ -14,6 +14,10 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ProcessResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Date states
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const handleProcess = async () => {
     if (!file) return;
@@ -26,11 +30,11 @@ const App: React.FC = () => {
       let data: ProcessResponse;
       
       if (activeTab === 'Monthly Site Visit Report') {
-        data = await processMonthlyFile(file);
+        data = await processMonthlyFile(file, startDate, endDate);
       } else if (activeTab === 'Weekly Site Visit Report') {
-        data = await processWeeklySiteVisitFile(file);
+        data = await processWeeklySiteVisitFile(file, startDate, endDate);
       } else if (activeTab === 'Daily Site Visit Report') {
-        data = await processDailySiteVisitFile(file);
+        data = await processDailySiteVisitFile(file, startDate, endDate);
       } else {
         // Default to Daily Report Processor
         data = await processFile(file);
@@ -50,6 +54,34 @@ const App: React.FC = () => {
     setFile(null);
     setResult(null);
     setError(null);
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const formatDate = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    if (tabId === 'Daily Site Visit Report') {
+      const formattedDate = formatDate(yesterday);
+      setStartDate(formattedDate);
+      setEndDate(formattedDate);
+    } else if (tabId === 'Weekly Site Visit Report') {
+      const formattedEnd = formatDate(yesterday);
+      
+      const lastWeek = new Date(yesterday);
+      lastWeek.setDate(yesterday.getDate() - 6); // 7 days inclusive range
+      const formattedStart = formatDate(lastWeek);
+
+      setStartDate(formattedStart);
+      setEndDate(formattedEnd);
+    } else {
+      setStartDate('');
+      setEndDate('');
+    }
   };
 
   const tabs = [
@@ -60,6 +92,7 @@ const App: React.FC = () => {
   ];
 
   const isProcessorTab = activeTab === 'Daily Report Processor' || activeTab === 'Monthly Site Visit Report' || activeTab === 'Daily Site Visit Report' || activeTab === 'Weekly Site Visit Report';
+  const showDateInputs = activeTab !== 'Daily Report Processor';
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 font-cinzel">
@@ -143,6 +176,40 @@ const App: React.FC = () => {
                       : 'Automated formatting for Project Performance Reports (Browser Mode)'}
               </p>
             </div>
+
+            {/* Date Inputs for Site Visit Reports */}
+            {showDateInputs && (
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 max-w-2xl mx-auto">
+                <div className="w-full">
+                  <label className="block text-sm font-semibold text-slate-700 mb-1 font-inter">Start Date</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Calendar className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg focus:ring-[#d4af37] focus:border-[#d4af37] text-sm font-sans"
+                    />
+                  </div>
+                </div>
+                <div className="w-full">
+                  <label className="block text-sm font-semibold text-slate-700 mb-1 font-inter">End Date</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Calendar className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg focus:ring-[#d4af37] focus:border-[#d4af37] text-sm font-sans"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Upload Section */}
             <FileUpload 
