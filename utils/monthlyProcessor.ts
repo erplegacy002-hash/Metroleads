@@ -177,7 +177,15 @@ async function generateMonthlyListImage(siteName: string, rows: any[], reportTit
 
 // --- Image Generation: Summary ---
 
-async function generateMonthlySummaryImage(siteName: string, summaryStats: Record<string, number>, sourceStats: Record<string, number>, reportTitle: string, startDate: string, endDate: string): Promise<string> {
+async function generateMonthlySummaryImage(
+  siteName: string, 
+  rows: any[], 
+  summaryStats: Record<string, number>, 
+  sourceStats: Record<string, number>, 
+  reportTitle: string, 
+  startDate: string, 
+  endDate: string
+): Promise<string> {
   const container = document.createElement('div');
   Object.assign(container.style, {
     position: 'fixed',
@@ -192,22 +200,60 @@ async function generateMonthlySummaryImage(siteName: string, summaryStats: Recor
     pointerEvents: 'none'
   });
 
-  const totalStatus = Object.values(summaryStats).reduce((a, b) => a + b, 0);
-  const totalSource = Object.values(sourceStats).reduce((a, b) => a + b, 0);
+  // Calculate Metrics for Header Box
+  const totalRows = rows.length; // Unique entries in the report
+  const countDate2 = rows.filter(r => r.date2 && r.date2 !== '-').length;
+  const countDate3 = rows.filter(r => r.date3 && r.date3 !== '-').length;
+  const totalRevisits = countDate2 + countDate3; // Sum of 2nd and 3rd visits
+  const totalVisits = totalRows + totalRevisits; // Total Footfall
+  const totalBookings = summaryStats['Booked'] || 0;
 
-  const summaryRowsHtml = Object.entries(summaryStats).map(([state, count]) => `
+  // Table Footer Calculation
+  const totalStatus = Object.values(summaryStats).reduce((a, b) => a + b, 0);
+  
+  // Revisit should NOT be included in "Total Visits" count for sources table footer if it's derived from existing visits
+  const totalSource = Object.entries(sourceStats)
+    .filter(([key]) => key !== 'Revisit')
+    .reduce((a, [_, b]) => a + b, 0);
+
+  // Define display order for States
+  const mandatoryStates = ["Visit Scheduled", "Revisit Done", "Booked"];
+  const excludedStates = new Set(["New Lead", "Contacted", "Interested", "Lost", "Visit Done"]);
+  
+  const allStateKeys = Array.from(new Set([...mandatoryStates, ...Object.keys(summaryStats)]))
+    .filter(state => !excludedStates.has(state));
+  
+  allStateKeys.sort((a, b) => {
+    const idxA = mandatoryStates.indexOf(a);
+    const idxB = mandatoryStates.indexOf(b);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.localeCompare(b);
+  });
+
+  const summaryRowsHtml = allStateKeys.map(state => {
+    const count = summaryStats[state] || 0;
+    return `
     <tr>
       <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: left; color: #000000;">${state}</td>
       <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${count}</td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 
-  const sourceRowsHtml = Object.entries(sourceStats).map(([source, count]) => `
+  // Define display order for Sources
+  const mandatorySources = ["Digital", "Channel Partner", "Referral", "Offer", "Walk-In", "Hoarding"];
+  const otherSources = Object.keys(sourceStats).filter(k => !mandatorySources.includes(k) && k !== 'Revisit');
+  const finalSourceOrder = [...mandatorySources, ...otherSources, "Revisit"];
+
+  const sourceRowsHtml = finalSourceOrder.map(source => {
+    const count = sourceStats[source] || 0;
+    return `
     <tr>
       <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: left; color: #000000;">${source}</td>
       <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${count}</td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
@@ -224,7 +270,23 @@ async function generateMonthlySummaryImage(siteName: string, summaryStats: Recor
         <span>End Date: ${endDate}</span>
       </div>
 
-      <div style="padding: 15px;">
+      <!-- Summary Metrics Box -->
+      <div style="margin: 15px 15px 20px 15px; border: 1px solid #000000; padding: 12px 0; display: flex; justify-content: space-between;">
+          <div style="flex: 1; text-align: center; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
+              <div style="font-size: 10px; font-weight: 800; color: #4b5563; text-transform: uppercase; margin-bottom: 5px; line-height: 1.3; min-height: 26px; display: flex; align-items: flex-end;">Total No. of<br>Visits</div>
+              <div style="font-size: 18px; font-weight: 900; color: #000000;">${totalVisits}</div>
+          </div>
+          <div style="flex: 1; text-align: center; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
+              <div style="font-size: 10px; font-weight: 800; color: #4b5563; text-transform: uppercase; margin-bottom: 5px; line-height: 1.3; min-height: 26px; display: flex; align-items: flex-end;">Total No. of<br>Revisits</div>
+              <div style="font-size: 18px; font-weight: 900; color: #000000;">${totalRevisits}</div>
+          </div>
+          <div style="flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
+              <div style="font-size: 10px; font-weight: 800; color: #4b5563; text-transform: uppercase; margin-bottom: 5px; line-height: 1.3; min-height: 26px; display: flex; align-items: flex-end;">Bookings</div>
+              <div style="font-size: 18px; font-weight: 900; color: #000000;">${totalBookings}</div>
+          </div>
+      </div>
+
+      <div style="padding: 0 15px 15px 15px;">
         <!-- Lead Status Summary -->
         <div style="font-size: 12px; font-weight: 800; color: #000000; text-transform: uppercase; margin-bottom: 6px;">LEAD STATUS SUMMARY</div>
         <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; margin-bottom: 20px;">
@@ -382,7 +444,7 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
 
           let state = (stateIdx !== -1 && row[stateIdx]) ? String(row[stateIdx]).trim() : '-';
           if (state.toLowerCase() === 're_visit_done') state = 'Revisit Done';
-          if (state.toLowerCase() === 'booked') continue;
+          // REMOVED BOOKED FILTER: Now including Booked records
 
            // --- Date Logic ---
           const d1 = visitDateIdx !== -1 ? parseDate(row[visitDateIdx]) : null;
@@ -462,8 +524,15 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
 
           rows.sort((a, b) => a.state.localeCompare(b.state));
 
-          const summaryStats: Record<string, number> = {};
-          const sourceStats: Record<string, number> = {};
+          const summaryStats: Record<string, number> = {
+            "New Lead": 0, "Contacted": 0, "Interested": 0, 
+            "Visit Scheduled": 0, "Visit Done": 0, "Revisit Done": 0, 
+            "Booked": 0, "Lost": 0
+          };
+          const sourceStats: Record<string, number> = {
+            "Digital": 0, "Channel Partner": 0, "Referral": 0, 
+            "Offer": 0, "Walk-In": 0, "Hoarding": 0, "Revisit": 0
+          };
           
           rows.forEach(r => {
              const s = r.state;
@@ -471,6 +540,17 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
 
              const src = r.source;
              sourceStats[src] = (sourceStats[src] || 0) + 1;
+
+             // Revisit Logic: Check 3rd, if blank check 2nd
+             let isRevisit = false;
+             if (r.date3 && r.date3 !== '-') {
+                 isRevisit = true;
+             } else if (r.date2 && r.date2 !== '-') {
+                 isRevisit = true;
+             }
+             if (isRevisit) {
+                 sourceStats['Revisit'] = (sourceStats['Revisit'] || 0) + 1;
+             }
           });
 
           const listDataUrl = await generateMonthlyListImage(site, rows, dateLabel, finalStartDateStr, finalEndDateStr);
@@ -478,7 +558,7 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
           images.push({ project_name: site, image_url: listDataUrl, filename: listFilename });
           zip.file(listFilename, listDataUrl.split(',')[1], { base64: true });
 
-          const summaryDataUrl = await generateMonthlySummaryImage(site, summaryStats, sourceStats, dateLabel, finalStartDateStr, finalEndDateStr);
+          const summaryDataUrl = await generateMonthlySummaryImage(site, rows, summaryStats, sourceStats, dateLabel, finalStartDateStr, finalEndDateStr);
           const summaryFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_monthly_summary.png`;
           images.push({ project_name: `Summary - ${site}`, image_url: summaryDataUrl, filename: summaryFilename });
           zip.file(summaryFilename, summaryDataUrl.split(',')[1], { base64: true });
