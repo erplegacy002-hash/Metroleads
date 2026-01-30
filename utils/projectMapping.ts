@@ -21,7 +21,7 @@ export const USER_PROJECT_MAPPING: Record<string, string> = {
   "Raunak Sharma": "Milestone",
   "Sneha Patil": "Milestone",
   "Neerja Sharma": "Milestone",
-  "Gauri Gokhale": "Statement",
+  "Gauri Gokhale": "Kairos",
   "Shubham Pardesi": "Aqua Life",
   "Vinita Bonde": "Aqua Life",
   "Sonali Shinde": "Kairos",
