@@ -519,7 +519,8 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
             date: d1 ? formatDate(d1) : '-',
             date2: d2 ? formatDate(d2) : '-',
             date3: d3 ? formatDate(d3) : '-',
-            rawDateVal: selectedDate 
+            rawDateVal: selectedDate,
+            sortDate: d1 // Store 1st visit date for sorting
           });
         }
 
@@ -537,18 +538,22 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
         for (const site of siteKeys) {
           const rows = sites[site];
           
-          // Sort by date (Ascending)
+          // Calculate Date Range for Header (Sort rawDateVal to get min/max independent of row order)
+          const validRawDates = rows.map(r => r.rawDateVal).filter(d => d) as Date[];
+          validRawDates.sort((a, b) => a.getTime() - b.getTime());
+          const startDateVal = validRawDates.length > 0 ? validRawDates[0] : null;
+          const endDateVal = validRawDates.length > 0 ? validRawDates[validRawDates.length - 1] : null;
+
+          // Sort Rows by Visit Date (d1)
           rows.sort((a, b) => {
-            const da = a.rawDateVal;
-            const db = b.rawDateVal;
+            const da = a.sortDate;
+            const db = b.sortDate;
+            if (!da && !db) return 0;
             if (!da) return 1;
             if (!db) return -1;
             return da > db ? 1 : -1;
           });
 
-          const startDateVal = rows.length > 0 ? rows[0].rawDateVal : null;
-          const endDateVal = rows.length > 0 ? rows[rows.length - 1].rawDateVal : null;
-          
           const autoStartDateStr = startDateVal ? formatDate(startDateVal) : "-";
           const autoEndDateStr = endDateVal ? formatDate(endDateVal) : "-";
           
