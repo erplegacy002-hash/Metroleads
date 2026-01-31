@@ -7,6 +7,7 @@ import { processFile } from './utils/clientProcessor';
 import { processMonthlyFile } from './utils/monthlyProcessor';
 import { processDailySiteVisitFile } from './utils/dailySiteVisitProcessor';
 import { processWeeklySiteVisitFile } from './utils/weeklySiteVisitProcessor';
+import { processMonthlyLeadSiteVisitFile } from './utils/monthlyLeadSiteVisitProcessor';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Daily Report Processor');
@@ -31,6 +32,8 @@ const App: React.FC = () => {
       
       if (activeTab === 'Monthly Site Visit Report') {
         data = await processMonthlyFile(file, startDate, endDate);
+      } else if (activeTab === 'Monthly (Lead + Site Visit) Report') {
+        data = await processMonthlyLeadSiteVisitFile(file, startDate, endDate);
       } else if (activeTab === 'Weekly Site Visit Report') {
         data = await processWeeklySiteVisitFile(file, startDate, endDate);
       } else if (activeTab === 'Daily Site Visit Report') {
@@ -89,9 +92,10 @@ const App: React.FC = () => {
     { id: 'Daily Site Visit Report', label: 'Daily Site Visit Report', icon: MapPin },
     { id: 'Weekly Site Visit Report', label: 'Weekly Site Visit Report', icon: CalendarDays },
     { id: 'Monthly Site Visit Report', label: 'Monthly Site Visit Report', icon: CalendarRange },
+    { id: 'Monthly (Lead + Site Visit) Report', label: 'Monthly (Lead + Site Visit) Report', icon: FileText },
   ];
 
-  const isProcessorTab = activeTab === 'Daily Report Processor' || activeTab === 'Monthly Site Visit Report' || activeTab === 'Daily Site Visit Report' || activeTab === 'Weekly Site Visit Report';
+  const isProcessorTab = activeTab === 'Daily Report Processor' || activeTab === 'Monthly Site Visit Report' || activeTab === 'Daily Site Visit Report' || activeTab === 'Weekly Site Visit Report' || activeTab === 'Monthly (Lead + Site Visit) Report';
   const showDateInputs = activeTab !== 'Daily Report Processor';
 
   return (
@@ -173,7 +177,9 @@ const App: React.FC = () => {
                     ? 'Automated daily site visit reports grouped by project.'
                     : activeTab === 'Weekly Site Visit Report'
                       ? 'Automated weekly site visit reports grouped by project.'
-                      : 'Automated formatting for Project Performance Reports (Browser Mode)'}
+                      : activeTab === 'Monthly (Lead + Site Visit) Report'
+                        ? 'Automated monthly lead & site visit summary grouped by project.'
+                        : 'Automated formatting for Project Performance Reports (Browser Mode)'}
               </p>
             </div>
 

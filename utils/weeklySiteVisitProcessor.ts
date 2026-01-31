@@ -79,7 +79,7 @@ function determineSource(cpData: any, sourceData: any, subSourceData: any): stri
     if (s.includes('digital') || s.includes('facebook') || s.includes('instagram') || s.includes('website') || s.includes('google') || s.includes('whatsapp') || s.includes('popup')) return 'Digital';
     if (s.includes('offer')) return 'Offer';
     if (s.includes('refer') || s.includes('referral') || s.includes('reference')) return 'Referral';
-    if (s.includes('hoarding') || s.includes('hoardings')) return 'Hoarding';
+    if (s.includes('hoarding') || s.includes('hoardings') || s.includes('incoming call - rahatne') || s.includes('site branding')) return 'Hoarding';
     return null;
   };
 
@@ -554,7 +554,7 @@ export async function processWeeklySiteVisitFile(file: File, manualStartDate?: s
           const finalStartDateStr = manualStartFormatted || autoStartDateStr;
           const finalEndDateStr = manualEndFormatted || autoEndDateStr;
 
-          rows.sort((a, b) => a.state.localeCompare(b.state));
+          // Do NOT re-sort by state here, keep date sort.
 
           const summaryStats: Record<string, TeamCounts> = {};
           const sourceStats: Record<string, TeamCounts> = {};

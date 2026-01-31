@@ -1,7 +1,6 @@
 import { read, utils } from 'xlsx';
 import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
-import { jsPDF } from "jspdf";
 import { GeneratedImage, ProcessResponse } from '../types';
 import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './projectMapping';
 
@@ -101,91 +100,14 @@ function determineSource(cpData: any, sourceData: any, subSourceData: any): stri
   return '-';
 }
 
-// --- Image Generation: Main List ---
-
-async function generateMonthlyListImage(siteName: string, rows: any[], reportTitle: string, startDate: string, endDate: string): Promise<string> {
-  const container = document.createElement('div');
-  Object.assign(container.style, {
-    position: 'fixed',
-    top: '0',
-    left: '0',
-    width: '1050px', 
-    backgroundColor: '#ffffff', 
-    padding: '15px', 
-    fontFamily: 'sans-serif',
-    color: '#000000', 
-    zIndex: '-9999',
-    pointerEvents: 'none'
-  });
-  
-  if (rows.length === 0) return '';
-
-  const headerHtml = `
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 40px;">Sr. No.</th>
-    <th style="padding: 6px 4px; text-align: left; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Visitor Name</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 80px;">Team</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 100px;">Source</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 140px;">CP Firm Name</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">Visit Date</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">2nd Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">3rd Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 110px;">State</th>
-  `;
-
-  const rowsHtml = rows.map((row, index) => `
-    <tr>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${index + 1}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: left; color: #000000; font-weight: 500;">${row.name}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.team}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.source}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.cpFirmName}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date2}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date3}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.state}</td>
-    </tr>
-  `).join('');
-
-  container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
-      <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">SITE VISIT</div>
-        <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
-        <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 12px; font-weight: 700; color: #000000;">${reportTitle}</div>
-      </div>
-      
-      <div style="padding: 5px 2px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #000000;">
-        <span>Start Date: ${startDate}</span>
-        <span>End Date: ${endDate}</span>
-      </div>
-
-      <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
-        <thead><tr>${headerHtml}</tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    </div>
-  `;
-
-  document.body.appendChild(container);
-  await new Promise(resolve => setTimeout(resolve, 600));
-
-  try {
-    return await toPng(container, { quality: 0.95, pixelRatio: 2 });
-  } finally {
-    if (document.body.contains(container)) document.body.removeChild(container);
-  }
-}
-
-// --- Image Generation: Summary ---
+// --- Image Generation: Summary (Modified for Lead + Site Visit) ---
 
 interface TeamCounts {
   presales: number;
   salesGre: number;
 }
 
-async function generateMonthlySummaryImage(
+async function generateMonthlyLeadSummaryImage(
   siteName: string, 
   rows: any[], 
   summaryStats: Record<string, TeamCounts>, 
@@ -208,19 +130,15 @@ async function generateMonthlySummaryImage(
     pointerEvents: 'none'
   });
 
-  // Calculate Metrics for Header Box
-  const totalRows = rows.length; // Unique entries in the report
+  // Calculate Metrics for Header Box (Used internally or for future use, box removed from UI)
+  const totalRows = rows.length; 
   const countDate2 = rows.filter(r => r.date2 && r.date2 !== '-').length;
   const countDate3 = rows.filter(r => r.date3 && r.date3 !== '-').length;
-  const totalRevisits = countDate2 + countDate3; // Sum of 2nd and 3rd visits
-  const totalVisits = totalRows + totalRevisits; // Total Footfall
+  const totalRevisits = countDate2 + countDate3;
+  const totalVisits = totalRows + totalRevisits;
   const totalBookings = (summaryStats['Booked']?.presales || 0) + (summaryStats['Booked']?.salesGre || 0);
 
   // Table Footer Calculation
-  const totalStatusPresales = Object.values(summaryStats).reduce((a, b) => a + b.presales, 0);
-  const totalStatusSalesGre = Object.values(summaryStats).reduce((a, b) => a + b.salesGre, 0);
-  
-  // Revisit should NOT be included in "Total Visits" count for sources table footer if it's derived from existing visits
   const totalSourcePresales = Object.entries(sourceStats)
     .filter(([key]) => key !== 'Revisit')
     .reduce((a, [_, b]) => a + b.presales, 0);
@@ -228,34 +146,6 @@ async function generateMonthlySummaryImage(
   const totalSourceSalesGre = Object.entries(sourceStats)
     .filter(([key]) => key !== 'Revisit')
     .reduce((a, [_, b]) => a + b.salesGre, 0);
-
-  // Define display order for States
-  const mandatoryStates = ["Visit Scheduled", "Revisit Done", "Booked"];
-  const excludedStates = new Set(["New Lead", "Contacted", "Interested", "Lost", "Visit Done"]);
-  
-  const allStateKeys = Array.from(new Set([...mandatoryStates, ...Object.keys(summaryStats)]))
-    .filter(state => !excludedStates.has(state));
-  
-  allStateKeys.sort((a, b) => {
-    const idxA = mandatoryStates.indexOf(a);
-    const idxB = mandatoryStates.indexOf(b);
-    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-    if (idxA !== -1) return -1;
-    if (idxB !== -1) return 1;
-    return a.localeCompare(b);
-  });
-
-  const summaryRowsHtml = allStateKeys.map(state => {
-    const counts = summaryStats[state] || { presales: 0, salesGre: 0 };
-    // Filter out rows with 0 in both columns
-    if (counts.presales === 0 && counts.salesGre === 0) return '';
-    return `
-    <tr>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: left; color: #000000;">${state}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.presales}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.salesGre}</td>
-    </tr>`;
-  }).join('');
 
   // Define display order for Sources
   const mandatorySources = ["Digital", "Channel Partner", "Referral", "Offer", "Walk-In", "Hoarding"];
@@ -289,42 +179,11 @@ async function generateMonthlySummaryImage(
         <span>End Date: ${endDate}</span>
       </div>
 
-      <!-- Summary Metrics Box -->
-      <div style="margin: 15px 15px 20px 15px; border: 1px solid #000000; padding: 12px 0; display: flex; justify-content: space-between;">
-          <div style="flex: 1; text-align: center; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
-              <div style="font-size: 10px; font-weight: 800; color: #4b5563; text-transform: uppercase; margin-bottom: 5px; line-height: 1.3; min-height: 26px; display: flex; align-items: flex-end;">Total No. of<br>Visits</div>
-              <div style="font-size: 18px; font-weight: 900; color: #000000;">${totalVisits}</div>
-          </div>
-          <div style="flex: 1; text-align: center; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
-              <div style="font-size: 10px; font-weight: 800; color: #4b5563; text-transform: uppercase; margin-bottom: 5px; line-height: 1.3; min-height: 26px; display: flex; align-items: flex-end;">Total No. of<br>Revisits</div>
-              <div style="font-size: 18px; font-weight: 900; color: #000000;">${totalRevisits}</div>
-          </div>
-          <div style="flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
-              <div style="font-size: 10px; font-weight: 800; color: #4b5563; text-transform: uppercase; margin-bottom: 5px; line-height: 1.3; min-height: 26px; display: flex; align-items: flex-end;">Bookings</div>
-              <div style="font-size: 18px; font-weight: 900; color: #000000;">${totalBookings}</div>
-          </div>
-      </div>
+      <!-- Spacer -->
+      <div style="height: 15px;"></div>
 
-      <div style="padding: 0 15px 15px 15px;">
-        <!-- Lead Status Summary -->
-        <div style="font-size: 12px; font-weight: 800; color: #000000; text-transform: uppercase; margin-bottom: 6px;">LEAD STATUS SUMMARY</div>
-        <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; margin-bottom: 20px;">
-          <thead>
-            <tr>
-              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">State</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Presales</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${summaryRowsHtml}
-            <tr>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; color: #000000; background-color: #f9fafb;">Total</td>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalStatusPresales}</td>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalStatusSalesGre}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div style="padding: 0 15px 40px 15px;">
+        <!-- Lead Status Summary Removed for this report -->
 
         <!-- Source Summary -->
         <div style="font-size: 12px; font-weight: 800; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
@@ -332,14 +191,14 @@ async function generateMonthlySummaryImage(
           <thead>
             <tr>
               <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Source</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Presales</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Leads</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Site Visits</th>
             </tr>
           </thead>
           <tbody>
             ${sourceRowsHtml}
             <tr>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; color: #000000; background-color: #f9fafb;">Total Visits</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; color: #000000; background-color: #f9fafb;">Total</td>
                <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSourcePresales}</td>
                <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSourceSalesGre}</td>
             </tr>
@@ -369,7 +228,7 @@ function findColumnIndex(row: any[], aliases: string[]): number {
   return -1;
 }
 
-export async function processMonthlyFile(file: File, manualStartDate?: string, manualEndDate?: string): Promise<ProcessResponse> {
+export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDate?: string, manualEndDate?: string): Promise<ProcessResponse> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -451,6 +310,14 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
           const row = rawRows[i];
           if (!row || row.length === 0) continue;
 
+          // 1. Check for 'test' or 'testing' in ANY column
+          const isTestRow = row.some(cell => {
+             if (!cell) return false;
+             const s = String(cell).toLowerCase();
+             return s.includes('test') || s.includes('testing');
+          });
+          if (isTestRow) continue;
+
           const rawAssigned = row[assignedToIdx];
           const assignedStr = rawAssigned ? String(rawAssigned).trim() : "Unassigned";
           const assignedLower = assignedStr.toLowerCase();
@@ -471,10 +338,7 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
           }
 
           const name = row[nameIdx] ? String(row[nameIdx]).trim() : '-';
-          const nameLower = name.toLowerCase();
-          // Filter if name contains 'test'
-          if (nameLower.includes('test')) continue;
-
+          
           let state = (stateIdx !== -1 && row[stateIdx]) ? String(row[stateIdx]).trim() : '-';
           if (state.toLowerCase() === 're_visit_done') state = 'Revisit Done';
           
@@ -484,17 +348,22 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
           const d3 = visitDate3Idx !== -1 ? parseDate(row[visitDate3Idx]) : null;
 
           let selectedDate: Date | null = null;
+          const datesToCheck = [d1, d2, d3].filter(d => d !== null) as Date[];
 
           if (startFilter && endFilter) {
-              const datesToCheck = [d1, d2, d3].filter(d => d !== null) as Date[];
               const datesInRange = datesToCheck.filter(d => d >= startFilter && d <= endFilter);
               
-              if (datesInRange.length === 0) continue; 
+              // If dates exist but NONE are in range, skip.
+              // If NO dates exist, keep the record (count as Lead without Visit).
+              if (datesToCheck.length > 0 && datesInRange.length === 0) {
+                 continue; 
+              }
               
-              datesInRange.sort((a,b) => b.getTime() - a.getTime());
-              selectedDate = datesInRange[0];
+              if (datesInRange.length > 0) {
+                datesInRange.sort((a,b) => b.getTime() - a.getTime());
+                selectedDate = datesInRange[0];
+              }
           } else {
-              const datesToCheck = [d1, d2, d3].filter(d => d !== null) as Date[];
               if (datesToCheck.length > 0) {
                    datesToCheck.sort((a,b) => b.getTime() - a.getTime());
                    selectedDate = datesToCheck[0];
@@ -537,10 +406,11 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
         for (const site of siteKeys) {
           const rows = sites[site];
           
-          // Sort by date (Ascending)
           rows.sort((a, b) => {
             const da = a.rawDateVal;
             const db = b.rawDateVal;
+            // Rows with no date go to the end
+            if (!da && !db) return 0;
             if (!da) return 1;
             if (!db) return -1;
             return da > db ? 1 : -1;
@@ -554,8 +424,6 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
           
           const finalStartDateStr = manualStartFormatted || autoStartDateStr;
           const finalEndDateStr = manualEndFormatted || autoEndDateStr;
-
-          // Do NOT re-sort by state here, keep date sort.
 
           const summaryStats: Record<string, TeamCounts> = {};
           const sourceStats: Record<string, TeamCounts> = {};
@@ -585,29 +453,9 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
              }
           });
 
-          // Generate List as PDF
-          const listDataUrl = await generateMonthlyListImage(site, rows, dateLabel, finalStartDateStr, finalEndDateStr);
-          
-          // Convert list image to PDF
-          const img = new Image();
-          img.src = listDataUrl;
-          await new Promise((r) => { img.onload = r; });
-          
-          const pdf = new jsPDF({
-            orientation: img.width > img.height ? 'l' : 'p',
-            unit: 'px',
-            format: [img.width, img.height]
-          });
-          pdf.addImage(listDataUrl, 'PNG', 0, 0, img.width, img.height);
-          const pdfDataUrl = pdf.output('datauristring');
-
-          const listFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_site_visit.pdf`;
-          images.push({ project_name: site, image_url: pdfDataUrl, filename: listFilename });
-          zip.file(listFilename, pdfDataUrl.split(',')[1], { base64: true });
-
-          // Summary remains PNG
-          const summaryDataUrl = await generateMonthlySummaryImage(site, rows, summaryStats, sourceStats, dateLabel, finalStartDateStr, finalEndDateStr);
-          const summaryFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_monthly_summary.png`;
+          // Generate Summary ONLY (Modified)
+          const summaryDataUrl = await generateMonthlyLeadSummaryImage(site, rows, summaryStats, sourceStats, dateLabel, finalStartDateStr, finalEndDateStr);
+          const summaryFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_monthly_lead_summary.png`;
           images.push({ project_name: `Summary - ${site}`, image_url: summaryDataUrl, filename: summaryFilename });
           zip.file(summaryFilename, summaryDataUrl.split(',')[1], { base64: true });
         }
