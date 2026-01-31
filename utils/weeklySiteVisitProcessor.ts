@@ -2,7 +2,7 @@ import { read, utils } from 'xlsx';
 import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
 import { GeneratedImage, ProcessResponse } from '../types';
-import { USER_PROJECT_MAPPING, DEFAULT_SITE } from './projectMapping';
+import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './projectMapping';
 
 // --- Helpers ---
 
@@ -122,18 +122,20 @@ async function generateWeeklyListImage(siteName: string, rows: any[], reportTitl
   const headerHtml = `
     <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 40px;">Sr. No.</th>
     <th style="padding: 6px 4px; text-align: left; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Visitor Name</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 110px;">Source</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 150px;">CP Firm Name</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 90px;">Visit Date</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 90px;">2nd Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 90px;">3rd Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 130px;">State</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 80px;">Team</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 100px;">Source</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 140px;">CP Firm Name</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">Visit Date</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">2nd Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">3rd Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 110px;">State</th>
   `;
 
   const rowsHtml = rows.map((row, index) => `
     <tr>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${index + 1}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: left; color: #000000; font-weight: 500;">${row.name}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.team}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.source}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.cpFirmName}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date}</td>
@@ -177,11 +179,16 @@ async function generateWeeklyListImage(siteName: string, rows: any[], reportTitl
 
 // --- Image Generation: Summary ---
 
+interface TeamCounts {
+  presales: number;
+  salesGre: number;
+}
+
 async function generateWeeklySummaryImage(
   siteName: string, 
   rows: any[], 
-  summaryStats: Record<string, number>, 
-  sourceStats: Record<string, number>, 
+  summaryStats: Record<string, TeamCounts>, 
+  sourceStats: Record<string, TeamCounts>, 
   reportTitle: string, 
   startDate: string, 
   endDate: string
@@ -191,7 +198,7 @@ async function generateWeeklySummaryImage(
     position: 'fixed',
     top: '0',
     left: '0',
-    width: '400px', 
+    width: '450px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
     fontFamily: 'sans-serif',
@@ -206,15 +213,20 @@ async function generateWeeklySummaryImage(
   const countDate3 = rows.filter(r => r.date3 && r.date3 !== '-').length;
   const totalRevisits = countDate2 + countDate3; // Sum of 2nd and 3rd visits
   const totalVisits = totalRows + totalRevisits; // Total Footfall
-  const totalBookings = summaryStats['Booked'] || 0;
+  const totalBookings = (summaryStats['Booked']?.presales || 0) + (summaryStats['Booked']?.salesGre || 0);
 
   // Table Footer Calculation
-  const totalStatus = Object.values(summaryStats).reduce((a, b) => a + b, 0);
+  const totalStatusPresales = Object.values(summaryStats).reduce((a, b) => a + b.presales, 0);
+  const totalStatusSalesGre = Object.values(summaryStats).reduce((a, b) => a + b.salesGre, 0);
   
   // Revisit should NOT be included in "Total Visits" count for sources table footer if it's derived from existing visits
-  const totalSource = Object.entries(sourceStats)
+  const totalSourcePresales = Object.entries(sourceStats)
     .filter(([key]) => key !== 'Revisit')
-    .reduce((a, [_, b]) => a + b, 0);
+    .reduce((a, [_, b]) => a + b.presales, 0);
+    
+  const totalSourceSalesGre = Object.entries(sourceStats)
+    .filter(([key]) => key !== 'Revisit')
+    .reduce((a, [_, b]) => a + b.salesGre, 0);
 
   // Define display order for States
   const mandatoryStates = ["Visit Scheduled", "Revisit Done", "Booked"];
@@ -233,11 +245,14 @@ async function generateWeeklySummaryImage(
   });
 
   const summaryRowsHtml = allStateKeys.map(state => {
-    const count = summaryStats[state] || 0;
+    const counts = summaryStats[state] || { presales: 0, salesGre: 0 };
+    // Filter out rows with 0 in both columns
+    if (counts.presales === 0 && counts.salesGre === 0) return '';
     return `
     <tr>
       <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: left; color: #000000;">${state}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${count}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.presales}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.salesGre}</td>
     </tr>`;
   }).join('');
 
@@ -247,11 +262,14 @@ async function generateWeeklySummaryImage(
   const finalSourceOrder = [...mandatorySources, ...otherSources, "Revisit"];
 
   const sourceRowsHtml = finalSourceOrder.map(source => {
-    const count = sourceStats[source] || 0;
+    const counts = sourceStats[source] || { presales: 0, salesGre: 0 };
+    // Filter out rows with 0 in both columns
+    if (counts.presales === 0 && counts.salesGre === 0) return '';
     return `
     <tr>
       <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: left; color: #000000;">${source}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${count}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.presales}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.salesGre}</td>
     </tr>`;
   }).join('');
 
@@ -293,14 +311,16 @@ async function generateWeeklySummaryImage(
           <thead>
             <tr>
               <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">State</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Count</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Presales</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
             </tr>
           </thead>
           <tbody>
             ${summaryRowsHtml}
             <tr>
                <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; color: #000000; background-color: #f9fafb;">Total</td>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalStatus}</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalStatusPresales}</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalStatusSalesGre}</td>
             </tr>
           </tbody>
         </table>
@@ -311,14 +331,16 @@ async function generateWeeklySummaryImage(
           <thead>
             <tr>
               <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Source</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Count</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Presales</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
             </tr>
           </thead>
           <tbody>
             ${sourceRowsHtml}
             <tr>
                <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; color: #000000; background-color: #f9fafb;">Total Visits</td>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSource}</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSourcePresales}</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSourceSalesGre}</td>
             </tr>
           </tbody>
         </table>
@@ -417,6 +439,11 @@ export async function processWeeklySiteVisitFile(file: File, manualStartDate?: s
           normalizedMapping[k.toLowerCase().trim()] = USER_PROJECT_MAPPING[k];
         });
 
+        const normalizedTeamMapping: Record<string, string> = {};
+        Object.keys(USER_TEAM_MAPPING).forEach(k => {
+          normalizedTeamMapping[k.toLowerCase().trim()] = USER_TEAM_MAPPING[k];
+        });
+
         const sites: Record<string, any[]> = {};
         
         for (let i = headerIndex + 1; i < rawRows.length; i++) {
@@ -433,8 +460,13 @@ export async function processWeeklySiteVisitFile(file: File, manualStartDate?: s
           });
 
           let siteName = DEFAULT_SITE;
+          let team = '-';
+
           if (matchedUserKey) {
             siteName = normalizedMapping[matchedUserKey];
+            if (normalizedTeamMapping[matchedUserKey]) {
+                team = normalizedTeamMapping[matchedUserKey];
+            }
           }
 
           const name = row[nameIdx] ? String(row[nameIdx]).trim() : '-';
@@ -481,6 +513,7 @@ export async function processWeeklySiteVisitFile(file: File, manualStartDate?: s
           sites[siteName].push({
             name,
             state,
+            team,
             source,
             cpFirmName,
             date: d1 ? formatDate(d1) : '-',
@@ -523,22 +556,22 @@ export async function processWeeklySiteVisitFile(file: File, manualStartDate?: s
 
           rows.sort((a, b) => a.state.localeCompare(b.state));
 
-          const summaryStats: Record<string, number> = {
-            "New Lead": 0, "Contacted": 0, "Interested": 0, 
-            "Visit Scheduled": 0, "Visit Done": 0, "Revisit Done": 0, 
-            "Booked": 0, "Lost": 0
-          };
-          const sourceStats: Record<string, number> = {
-            "Digital": 0, "Channel Partner": 0, "Referral": 0, 
-            "Offer": 0, "Walk-In": 0, "Hoarding": 0, "Revisit": 0
+          const summaryStats: Record<string, TeamCounts> = {};
+          const sourceStats: Record<string, TeamCounts> = {};
+
+          const incrementStats = (stats: Record<string, TeamCounts>, key: string, isPresales: boolean) => {
+            if (!stats[key]) stats[key] = { presales: 0, salesGre: 0 };
+            if (isPresales) {
+                stats[key].presales++;
+            } else {
+                stats[key].salesGre++;
+            }
           };
           
           rows.forEach(r => {
-             const s = r.state;
-             summaryStats[s] = (summaryStats[s] || 0) + 1;
-
-             const src = r.source;
-             sourceStats[src] = (sourceStats[src] || 0) + 1;
+             const isPresales = r.team === 'Presales';
+             incrementStats(summaryStats, r.state, isPresales);
+             incrementStats(sourceStats, r.source, isPresales);
 
              // Revisit Logic: Check 3rd, if blank check 2nd
              let isRevisit = false;
@@ -548,7 +581,7 @@ export async function processWeeklySiteVisitFile(file: File, manualStartDate?: s
                  isRevisit = true;
              }
              if (isRevisit) {
-                 sourceStats['Revisit'] = (sourceStats['Revisit'] || 0) + 1;
+                 incrementStats(sourceStats, 'Revisit', isPresales);
              }
           });
 

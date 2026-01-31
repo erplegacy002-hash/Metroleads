@@ -2,7 +2,6 @@
 // Format: "User Name": "Site Name"
 
 export const USER_PROJECT_MAPPING: Record<string, string> = {
-  // Example mappings - Replace/Add as needed
   "Aishwarya Gulave": "Aqua Life",
   "Raj Warde": "Aqua Life",
   "Shubhantu Yadav": "Milestone",
@@ -27,7 +26,29 @@ export const USER_PROJECT_MAPPING: Record<string, string> = {
   "Sonali Shinde": "Kairos",
   "Sakshi Jamdar": "Kairos",
   "Sejal Satav": "Statement", 
-  // Add more users here
+};
+
+export const USER_TEAM_MAPPING: Record<string, string> = {
+  "Aishwarya Gulave": "Sales",
+  "Raj Warde": "Sales",
+  "Shubhantu Yadav": "Sales",
+  "Smita Kad": "Presales",
+  "Sanket Jejurkar": "Sales",
+  "Pranav Satpute": "Sales",
+  "Khushi Tamang": "Sales",
+  "Mohit Manani": "Sales",
+  "Manisha Singh": "Presales",
+  "Jai Mulik": "Sales",
+  "Shubham Sangamnerkar": "Sales",
+  "Sunil Mane": "Sales",
+  "Omkar Khandge": "Sales",
+  "Sneha Patil": "GRE",
+  "Neerja Sharma": "GRE",
+  "Gauri Gokhale": "Sales",
+  "Shubham Pardesi": "Sales",
+  "Sonali Shinde": "Sales",
+  "Sakshi Jamdar": "GRE",
+  "Sejal Satav": "Presales",
 };
 
 // Default value if user is not found in the mapping
