@@ -8,8 +8,9 @@ import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './project
 
 interface AggregatedLead {
   user: string;
-  source: string;
   state: string;
+  pageName: string;
+  source: string;
   count: number;
 }
 
@@ -23,7 +24,7 @@ async function generatePresalesLeadsImage(
     position: 'fixed',
     top: '0',
     left: '0',
-    width: '800px', 
+    width: '1000px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
     fontFamily: 'sans-serif',
@@ -37,8 +38,9 @@ async function generatePresalesLeadsImage(
   const headerHtml = `
     <th style="padding: 6px 8px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 50px;">Sr. No.</th>
     <th style="padding: 6px 8px; text-align: left; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6;">User (Assigned to)</th>
+    <th style="padding: 6px 8px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 120px;">Lead State</th>
+    <th style="padding: 6px 8px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 200px;">Page Name</th>
     <th style="padding: 6px 8px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 140px;">Lead Source</th>
-    <th style="padding: 6px 8px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 140px;">Lead State</th>
     <th style="padding: 6px 8px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 80px;">Lead Count</th>
   `;
 
@@ -46,8 +48,9 @@ async function generatePresalesLeadsImage(
     <tr>
       <td style="padding: 5px 8px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${index + 1}</td>
       <td style="padding: 5px 8px; border: 1px solid #000000; font-size: 11px; text-align: left; color: #000000; font-weight: 500;">${row.user}</td>
-      <td style="padding: 5px 8px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.source}</td>
       <td style="padding: 5px 8px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.state}</td>
+      <td style="padding: 5px 8px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; word-break: break-word;">${row.pageName}</td>
+      <td style="padding: 5px 8px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.source}</td>
       <td style="padding: 5px 8px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 700;">${row.count}</td>
     </tr>
   `).join('');
@@ -72,7 +75,7 @@ async function generatePresalesLeadsImage(
         <tbody>
           ${rowsHtml}
           <tr>
-            <td colspan="4" style="padding: 5px 8px; border: 1px solid #000000; font-size: 11px; text-align: right; color: #000000; font-weight: 800; background-color: #f9fafb;">Total</td>
+            <td colspan="5" style="padding: 5px 8px; border: 1px solid #000000; font-size: 11px; text-align: right; color: #000000; font-weight: 800; background-color: #f9fafb;">Total</td>
             <td style="padding: 5px 8px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 800; background-color: #f9fafb;">${totalLeads}</td>
           </tr>
         </tbody>
@@ -117,10 +120,12 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
         let assignedToIdx = -1;
         let leadSourceIdx = -1;
         let leadStateIdx = -1;
+        let pageNameIdx = -1;
 
         const assignedAliases = ['assigned to', 'assigned_to', 'owner', 'agent', 'executive', 'sales executive', 'allocated to', 'sales person', 'sourcing manager', 'closing manager'];
         const sourceAliases = ['lead source', 'lead source (f)', 'source', 'source of lead', 'enquiry source'];
         const stateAliases = ['lead state', 'state', 'region', 'location'];
+        const pageNameAliases = ['page name', 'page_name', 'page', 'campaign', 'campaign name', 'ad set name', 'ad set', 'form name'];
 
         for (let i = 0; i < Math.min(100, rawRows.length); i++) {
           const row = rawRows[i];
@@ -135,13 +140,14 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
             assignedToIdx = aIdx;
             leadSourceIdx = sIdx;
             leadStateIdx = stIdx;
+            pageNameIdx = findColumnIndex(row, pageNameAliases);
             break;
           }
         }
 
         if (headerIndex === -1) throw new Error("Could not find required columns (Assigned To, Lead Source/State).");
 
-        // Aggregation: Key = User|Source|State
+        // Aggregation: Key = User|State|PageName|Source
         const aggregation: Record<string, number> = {};
 
         for (let i = headerIndex + 1; i < rawRows.length; i++) {
@@ -171,9 +177,10 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
           // Extract other fields
           const leadSource = leadSourceIdx !== -1 && row[leadSourceIdx] ? String(row[leadSourceIdx]).trim() : '-';
           const leadState = leadStateIdx !== -1 && row[leadStateIdx] ? String(row[leadStateIdx]).trim() : '-';
+          const pageName = pageNameIdx !== -1 && row[pageNameIdx] ? String(row[pageNameIdx]).trim() : '-';
 
           // Create Key
-          const key = `${userName}||${leadSource}||${leadState}`;
+          const key = `${userName}||${leadState}||${pageName}||${leadSource}`;
 
           if (!aggregation[key]) {
               aggregation[key] = 0;
@@ -188,11 +195,12 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
 
         // Convert map to array
         Object.entries(aggregation).forEach(([key, count]) => {
-            const [user, source, state] = key.split('||');
+            const [user, state, pageName, source] = key.split('||');
             rows.push({
                 user,
-                source,
                 state,
+                pageName,
+                source,
                 count
             });
         });
