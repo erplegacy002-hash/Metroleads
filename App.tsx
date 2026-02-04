@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Loader2, Download, AlertCircle, FileText, MapPin, CalendarRange, CalendarDays, Calendar } from 'lucide-react';
+import { Loader2, Download, AlertCircle, FileText, MapPin, CalendarRange, CalendarDays, Calendar, Users } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import ImageGallery from './components/ImageGallery';
 import { ProcessResponse } from './types';
@@ -8,6 +8,7 @@ import { processMonthlyFile } from './utils/monthlyProcessor';
 import { processDailySiteVisitFile } from './utils/dailySiteVisitProcessor';
 import { processWeeklySiteVisitFile } from './utils/weeklySiteVisitProcessor';
 import { processMonthlyLeadSiteVisitFile } from './utils/monthlyLeadSiteVisitProcessor';
+import { processPresalesLeadsFile } from './utils/presalesLeadsProcessor';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Daily Report Processor');
@@ -38,6 +39,8 @@ const App: React.FC = () => {
         data = await processWeeklySiteVisitFile(file, startDate, endDate);
       } else if (activeTab === 'Daily Site Visit Report') {
         data = await processDailySiteVisitFile(file, startDate, endDate);
+      } else if (activeTab === 'Presales Leads Report') {
+        data = await processPresalesLeadsFile(file);
       } else {
         // Default to Daily Report Processor
         data = await processFile(file);
@@ -81,6 +84,9 @@ const App: React.FC = () => {
 
       setStartDate(formattedStart);
       setEndDate(formattedEnd);
+    } else if (tabId === 'Presales Leads Report') {
+      setStartDate('');
+      setEndDate('');
     } else {
       setStartDate('');
       setEndDate('');
@@ -93,10 +99,11 @@ const App: React.FC = () => {
     { id: 'Weekly Site Visit Report', label: 'Weekly Site Visit Report', icon: CalendarDays },
     { id: 'Monthly Site Visit Report', label: 'Monthly Site Visit Report', icon: CalendarRange },
     { id: 'Monthly (Lead + Site Visit) Report', label: 'Monthly (Lead + Site Visit) Report', icon: FileText },
+    { id: 'Presales Leads Report', label: 'Presales Leads Report', icon: Users },
   ];
 
-  const isProcessorTab = activeTab === 'Daily Report Processor' || activeTab === 'Monthly Site Visit Report' || activeTab === 'Daily Site Visit Report' || activeTab === 'Weekly Site Visit Report' || activeTab === 'Monthly (Lead + Site Visit) Report';
-  const showDateInputs = activeTab !== 'Daily Report Processor';
+  const isProcessorTab = tabs.map(t => t.id).includes(activeTab);
+  const showDateInputs = activeTab !== 'Daily Report Processor' && activeTab !== 'Presales Leads Report';
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 font-cinzel">
@@ -179,7 +186,9 @@ const App: React.FC = () => {
                       ? 'Automated weekly site visit reports grouped by project.'
                       : activeTab === 'Monthly (Lead + Site Visit) Report'
                         ? 'Automated monthly lead & site visit summary grouped by project.'
-                        : 'Automated formatting for Project Performance Reports (Browser Mode)'}
+                        : activeTab === 'Presales Leads Report'
+                          ? 'Automated presales leads summary grouped by user and lead details.'
+                          : 'Automated formatting for Project Performance Reports (Browser Mode)'}
               </p>
             </div>
 
