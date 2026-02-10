@@ -1,13 +1,13 @@
 import { read, utils } from 'xlsx';
-import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
 import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { GeneratedImage, ProcessResponse } from '../types';
 import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './projectMapping';
 
 // --- Helpers ---
 
-function determineSource(cpData: any, sourceData: any, subSourceData: any): string {
+function determineSource(cpData: any, sourceData: any, subSourceData: any, pageNameData: any): string {
   // 1. If CP Firm Name exists and is not empty/hyphen, it is a Channel Partner
   if (cpData && String(cpData).trim().length > 0 && String(cpData).trim() !== '-') {
     return 'Channel Partner';
@@ -15,6 +15,7 @@ function determineSource(cpData: any, sourceData: any, subSourceData: any): stri
 
   const rawSource = sourceData ? String(sourceData).trim() : '';
   const rawSubSource = subSourceData ? String(subSourceData).trim() : '';
+  const rawPageName = pageNameData ? String(pageNameData).trim() : '';
 
   const checkKeywords = (str: string): string | null => {
     const s = str.toLowerCase();
@@ -40,12 +41,18 @@ function determineSource(cpData: any, sourceData: any, subSourceData: any): stri
     if (match) return match;
   }
 
-  // 4. Fallback
+  // 4. Check Page Name third
+  if (rawPageName.length > 0) {
+    const match = checkKeywords(rawPageName);
+    if (match) return match;
+  }
+
+  // 5. Fallback
   if (rawSource.length > 0) return rawSource;
   return '-';
 }
 
-// --- Image Generation ---
+// --- PDF Generation ---
 
 interface AggregatedLead {
   user: string;
@@ -55,83 +62,104 @@ interface AggregatedLead {
   count: number;
 }
 
-async function generatePresalesLeadsImage(
+async function generatePresalesLeadsPDF(
   siteName: string, 
   rows: AggregatedLead[], 
   reportTitle: string
 ): Promise<string> {
-  const container = document.createElement('div');
-  Object.assign(container.style, {
-    position: 'fixed',
-    top: '0',
-    left: '0',
-    width: '1000px', 
-    backgroundColor: '#ffffff', 
-    padding: '20px', 
-    fontFamily: 'sans-serif',
-    color: '#000000', 
-    zIndex: '-9999',
-    pointerEvents: 'none'
-  });
+  const doc = new jsPDF();
+
+  // --- Header ---
+  const pageWidth = doc.internal.pageSize.width;
   
-  if (rows.length === 0) return '';
+  // Title
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("PRESALES LEADS", pageWidth / 2, 15, { align: "center" });
+  
+  doc.setLineWidth(0.5);
+  doc.line(pageWidth / 2 - 25, 18, pageWidth / 2 + 25, 18);
+  
+  // Site Name
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text(siteName.toUpperCase(), pageWidth / 2, 26, { align: "center" });
 
-  const headerHtml = `
-    <th style="padding: 8px 10px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 50px;">Sr. No.</th>
-    <th style="padding: 8px 10px; text-align: left; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6;">User (Assigned to)</th>
-    <th style="padding: 8px 10px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 120px;">Lead State</th>
-    <th style="padding: 8px 10px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 220px;">Page Name</th>
-    <th style="padding: 8px 10px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 140px;">Lead Source</th>
-    <th style="padding: 8px 10px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 80px;">Lead Count</th>
-  `;
+  doc.setLineWidth(0.5);
+  doc.line(pageWidth / 2 - 25, 29, pageWidth / 2 + 25, 29);
 
-  const rowsHtml = rows.map((row, index) => `
-    <tr>
-      <td style="padding: 6px 10px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${index + 1}</td>
-      <td style="padding: 6px 10px; border: 1px solid #000000; font-size: 11px; text-align: left; color: #000000; font-weight: 500;">${row.user}</td>
-      <td style="padding: 6px 10px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.state}</td>
-      <td style="padding: 6px 10px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; word-break: break-word;">${row.pageName}</td>
-      <td style="padding: 6px 10px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.source}</td>
-      <td style="padding: 6px 10px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 700;">${row.count}</td>
-    </tr>
-  `).join('');
+  // Report Title
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text(reportTitle, pageWidth / 2, 36, { align: "center" });
 
+  // --- Table Data ---
+  
   // Calculate total leads
   const totalLeads = rows.reduce((acc, curr) => acc + curr.count, 0);
 
-  container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
-      <div style="padding: 15px 20px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">PRESALES LEADS</div>
-        <div style="width: 150px; height: 1px; background-color: #000000; margin: 8px auto;"></div>
-        <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
-        <div style="width: 150px; height: 1px; background-color: #000000; margin: 8px auto;"></div>
-        <div style="font-size: 12px; font-weight: 700; color: #000000;">${reportTitle}</div>
-      </div>
+  const tableBody = rows.map((row, index) => [
+    index + 1,
+    row.user,
+    row.state,
+    row.pageName,
+    row.source,
+    row.count
+  ]);
 
-      <div style="height: 10px;"></div>
+  // Add Total Row
+  tableBody.push([
+    "",
+    "",
+    "",
+    "",
+    "TOTAL",
+    totalLeads
+  ]);
 
-      <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
-        <thead><tr>${headerHtml}</tr></thead>
-        <tbody>
-          ${rowsHtml}
-          <tr>
-            <td colspan="5" style="padding: 8px 10px; border: 1px solid #000000; font-size: 11px; text-align: right; color: #000000; font-weight: 800; background-color: #f9fafb;">Total</td>
-            <td style="padding: 8px 10px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000; font-weight: 800; background-color: #f9fafb;">${totalLeads}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  `;
+  // --- Generate Table ---
+  autoTable(doc, {
+    startY: 42,
+    head: [['Sr. No.', 'User (Assigned to)', 'Lead State', 'Page Name', 'Lead Source', 'Lead Count']],
+    body: tableBody,
+    theme: 'grid',
+    styles: {
+        fontSize: 10,
+        font: "helvetica",
+        textColor: [0, 0, 0],
+        lineColor: [0, 0, 0],
+        lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [243, 244, 246], // #f3f4f6
+      textColor: [0, 0, 0],
+      fontStyle: 'bold',
+      halign: 'center',
+      valign: 'middle',
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 20 },
+      1: { halign: 'left' },
+      2: { halign: 'center' },
+      3: { halign: 'center' },
+      4: { halign: 'center' },
+      5: { halign: 'center', fontStyle: 'bold', cellWidth: 30 }
+    },
+    didParseCell: function (data: any) {
+        // Identify the last row (Total row)
+        if (data.row.index === tableBody.length - 1) {
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.fillColor = [249, 250, 251]; // #f9fafb
+            
+            // Align "TOTAL" label to the right
+            if (data.column.index === 4) { 
+               data.cell.styles.halign = 'right';
+            }
+        }
+    }
+  });
 
-  document.body.appendChild(container);
-  await new Promise(resolve => setTimeout(resolve, 600));
-
-  try {
-    return await toPng(container, { quality: 0.95, pixelRatio: 2 });
-  } finally {
-    if (document.body.contains(container)) document.body.removeChild(container);
-  }
+  return doc.output('datauristring');
 }
 
 // --- Main Processor ---
@@ -229,8 +257,9 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
           const leadSourceData = leadSourceIdx !== -1 ? row[leadSourceIdx] : null;
           const cpData = cpFirmNameIdx !== -1 ? row[cpFirmNameIdx] : null;
           const subSourceData = subSourceIdx !== -1 ? row[subSourceIdx] : null;
+          const pageNameData = pageNameIdx !== -1 ? row[pageNameIdx] : null;
           
-          const normalizedSource = determineSource(cpData, leadSourceData, subSourceData);
+          const normalizedSource = determineSource(cpData, leadSourceData, subSourceData, pageNameData);
 
           // Create Key
           const key = `${userName}||${leadState}||${pageName}||${normalizedSource}`;
@@ -267,30 +296,14 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
         const reportTitle = "SUMMARY REPORT";
         const siteName = "Consolidated Leads";
 
-        // Generate Image from HTML
-        const imgDataUrl = await generatePresalesLeadsImage(siteName, rows, reportTitle);
+        // Generate PDF directly
+        const pdfDataUrl = await generatePresalesLeadsPDF(siteName, rows, reportTitle);
         
-        // Convert to PDF
-        const img = new Image();
-        img.src = imgDataUrl;
-        await new Promise((r) => { img.onload = r; });
-        
-        const pdf = new jsPDF({
-            orientation: img.width > img.height ? 'l' : 'p',
-            unit: 'px',
-            format: [img.width, img.height]
-        });
-        
-        pdf.addImage(imgDataUrl, 'PNG', 0, 0, img.width, img.height);
-        const pdfDataUrl = pdf.output('datauristring');
-
         const images: GeneratedImage[] = [];
         const zip = new JSZip();
 
         const filename = `presales_leads_summary.pdf`;
         
-        // Push the PDF Data URL. 
-        // Note: The frontend ImageGallery needs to handle PDF icons for .pdf extension (already handled in previous code)
         images.push({ project_name: "Presales Leads Summary", image_url: pdfDataUrl, filename: filename });
         zip.file(filename, pdfDataUrl.split(',')[1], { base64: true });
 

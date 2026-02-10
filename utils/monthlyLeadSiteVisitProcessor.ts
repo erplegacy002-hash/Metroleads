@@ -134,7 +134,9 @@ async function generateMonthlyLeadSummaryImage(
   const totalRows = rows.length; 
   const countDate2 = rows.filter(r => r.date2 && r.date2 !== '-').length;
   const countDate3 = rows.filter(r => r.date3 && r.date3 !== '-').length;
-  const totalRevisits = countDate2 + countDate3;
+  const countDate4 = rows.filter(r => r.date4 && r.date4 !== '-').length;
+  const countDate5 = rows.filter(r => r.date5 && r.date5 !== '-').length;
+  const totalRevisits = countDate2 + countDate3 + countDate4 + countDate5;
   const totalVisits = totalRows + totalRevisits;
   const totalBookings = (summaryStats['Booked']?.presales || 0) + (summaryStats['Booked']?.salesGre || 0);
 
@@ -243,7 +245,7 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
         // Detect Columns
         let headerIndex = -1;
         let nameIdx = -1, stateIdx = -1, assignedToIdx = -1;
-        let visitDateIdx = -1, visitDate2Idx = -1, visitDate3Idx = -1;
+        let visitDateIdx = -1, visitDate2Idx = -1, visitDate3Idx = -1, visitDate4Idx = -1, visitDate5Idx = -1;
         let cpFirmNameIdx = -1, leadSourceIdx = -1, subSourceIdx = -1;
 
         const nameAliases = ['name', 'visitor name', 'lead name', 'customer name', 'full name', 'client name'];
@@ -253,6 +255,8 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
         const dateAliases = ['visit date', 'visit_date', 'date of visit', 'date', 'visited date', 'created time', 'created on', 'entry date'];
         const date2Aliases = ['2nd visit date', 'second visit date', 'visit date 2', '2nd_visit_date'];
         const date3Aliases = ['3rd visit date', 'third visit date', 'visit date 3', '3rd_visit_date'];
+        const date4Aliases = ['4th site visit date', '4th site visit date (az)', '4th visit date', 'fourth visit date', 'visit date 4', '4th_visit_date', '4th site visit', '4th visit', 'visit 4'];
+        const date5Aliases = ['5th site visit date', '5th visit date', 'fifth visit date', 'visit date 5', '5th_visit_date', '5th site visit', '5th visit', 'visit 5'];
         
         const cpFirmAliases = ['cp firm name', 'cp firm name (v)', 'cp name', 'channel partner firm name'];
         const leadSourceAliases = ['lead source', 'lead source (f)', 'source', 'source of lead', 'enquiry source'];
@@ -269,6 +273,8 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
           const dIdx = findColumnIndex(row, dateAliases);
           const d2Idx = findColumnIndex(row, date2Aliases);
           const d3Idx = findColumnIndex(row, date3Aliases);
+          const d4Idx = findColumnIndex(row, date4Aliases);
+          const d5Idx = findColumnIndex(row, date5Aliases);
           
           const cpIdx = findColumnIndex(row, cpFirmAliases);
           const lsIdx = findColumnIndex(row, leadSourceAliases);
@@ -282,6 +288,8 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
             visitDateIdx = dIdx;
             visitDate2Idx = d2Idx;
             visitDate3Idx = d3Idx;
+            visitDate4Idx = d4Idx;
+            visitDate5Idx = d5Idx;
             cpFirmNameIdx = cpIdx;
             leadSourceIdx = lsIdx;
             subSourceIdx = ssIdx;
@@ -310,13 +318,14 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
           const row = rawRows[i];
           if (!row || row.length === 0) continue;
 
-          // 1. Check for 'test' or 'testing' in ANY column
-          const isTestRow = row.some(cell => {
+          // GLOBAL EXCLUSION CHECK
+          // Exclude rows if any cell contains "metro", "test", or "ramesh bodke"
+          const isExcluded = row.some(cell => {
              if (!cell) return false;
              const s = String(cell).toLowerCase();
-             return s.includes('test') || s.includes('testing');
+             return s.includes('metro') || s.includes('test') || s.includes('ramesh bodke');
           });
-          if (isTestRow) continue;
+          if (isExcluded) continue;
 
           const rawAssigned = row[assignedToIdx];
           const assignedStr = rawAssigned ? String(rawAssigned).trim() : "Unassigned";
@@ -346,9 +355,11 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
           const d1 = visitDateIdx !== -1 ? parseDate(row[visitDateIdx]) : null;
           const d2 = visitDate2Idx !== -1 ? parseDate(row[visitDate2Idx]) : null;
           const d3 = visitDate3Idx !== -1 ? parseDate(row[visitDate3Idx]) : null;
+          const d4 = visitDate4Idx !== -1 ? parseDate(row[visitDate4Idx]) : null;
+          const d5 = visitDate5Idx !== -1 ? parseDate(row[visitDate5Idx]) : null;
 
           let selectedDate: Date | null = null;
-          const datesToCheck = [d1, d2, d3].filter(d => d !== null) as Date[];
+          const datesToCheck = [d1, d2, d3, d4, d5].filter(d => d !== null) as Date[];
 
           if (startFilter && endFilter) {
               const datesInRange = datesToCheck.filter(d => d >= startFilter && d <= endFilter);
@@ -388,6 +399,8 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
             date: d1 ? formatDate(d1) : '-',
             date2: d2 ? formatDate(d2) : '-',
             date3: d3 ? formatDate(d3) : '-',
+            date4: d4 ? formatDate(d4) : '-',
+            date5: d5 ? formatDate(d5) : '-',
             rawDateVal: selectedDate,
             sortDate: d1 // Store 1st visit date for sorting
           });
@@ -447,7 +460,11 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
              incrementStats(sourceStats, r.source, isPresales);
 
              let isRevisit = false;
-             if (r.date3 && r.date3 !== '-') {
+             if (r.date5 && r.date5 !== '-') {
+                 isRevisit = true;
+             } else if (r.date4 && r.date4 !== '-') {
+                 isRevisit = true;
+             } else if (r.date3 && r.date3 !== '-') {
                  isRevisit = true;
              } else if (r.date2 && r.date2 !== '-') {
                  isRevisit = true;

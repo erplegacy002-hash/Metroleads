@@ -111,7 +111,7 @@ async function generateDailyListImage(siteName: string, rows: any[], dateLabel: 
     position: 'fixed',
     top: '0',
     left: '0',
-    width: '1050px', 
+    width: '1250px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
     fontFamily: 'sans-serif',
@@ -131,6 +131,8 @@ async function generateDailyListImage(siteName: string, rows: any[], dateLabel: 
     <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">Visit Date</th>
     <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">2nd Visit</th>
     <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">3rd Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">4th Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">5th Visit</th>
     <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 110px;">State</th>
   `;
 
@@ -144,6 +146,8 @@ async function generateDailyListImage(siteName: string, rows: any[], dateLabel: 
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date2}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date3}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date4}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date5}</td>
       <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.state}</td>
     </tr>
   `).join('');
@@ -214,7 +218,9 @@ async function generateDailySummaryImage(
   const totalRows = rows.length; // Unique entries in the report (1st visits)
   const countDate2 = rows.filter(r => r.date2 && r.date2 !== '-').length;
   const countDate3 = rows.filter(r => r.date3 && r.date3 !== '-').length;
-  const totalRevisits = countDate2 + countDate3; // Sum of 2nd and 3rd visits
+  const countDate4 = rows.filter(r => r.date4 && r.date4 !== '-').length;
+  const countDate5 = rows.filter(r => r.date5 && r.date5 !== '-').length;
+  const totalRevisits = countDate2 + countDate3 + countDate4 + countDate5; // Sum of 2nd, 3rd, 4th, 5th visits
   const totalVisits = totalRows + totalRevisits; // Total Footfall
   const totalBookings = (summaryStats['Booked']?.presales || 0) + (summaryStats['Booked']?.salesGre || 0);
 
@@ -234,10 +240,9 @@ async function generateDailySummaryImage(
 
   // Define display order for States
   const mandatoryStates = ["Visit Scheduled", "Revisit Done", "Booked"];
-  const excludedStates = new Set(["New Lead", "Contacted", "Interested", "Lost", "Visit Done"]);
   
-  const allStateKeys = Array.from(new Set([...mandatoryStates, ...Object.keys(summaryStats)]))
-    .filter(state => !excludedStates.has(state));
+  // No longer filtering states. Including ALL states found.
+  const allStateKeys = Array.from(new Set([...mandatoryStates, ...Object.keys(summaryStats)]));
   
   // Custom sort: Mandatory first, then others alphabetical
   allStateKeys.sort((a, b) => {
@@ -390,7 +395,7 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
         // Detect Columns
         let headerIndex = -1;
         let nameIdx = -1, stateIdx = -1, assignedToIdx = -1;
-        let visitDateIdx = -1, visitDate2Idx = -1, visitDate3Idx = -1;
+        let visitDateIdx = -1, visitDate2Idx = -1, visitDate3Idx = -1, visitDate4Idx = -1, visitDate5Idx = -1;
         let cpFirmNameIdx = -1, leadSourceIdx = -1, subSourceIdx = -1;
 
         // PRIORITIZE "Name" specifically
@@ -401,6 +406,8 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
         const dateAliases = ['visit date', 'visit_date', 'date of visit', 'date', 'visited date', 'created time', 'created on', 'entry date'];
         const date2Aliases = ['2nd visit date', 'second visit date', 'visit date 2', '2nd_visit_date'];
         const date3Aliases = ['3rd visit date', 'third visit date', 'visit date 3', '3rd_visit_date'];
+        const date4Aliases = ['4th site visit date', '4th site visit date (az)', '4th visit date', 'fourth visit date', 'visit date 4', '4th_visit_date', '4th site visit', '4th visit', 'visit 4'];
+        const date5Aliases = ['5th site visit date', '5th visit date', 'fifth visit date', 'visit date 5', '5th_visit_date', '5th site visit', '5th visit', 'visit 5'];
         
         const cpFirmAliases = ['cp firm name', 'cp firm name (v)', 'cp name', 'channel partner firm name'];
         const leadSourceAliases = ['lead source', 'lead source (f)', 'source', 'source of lead', 'enquiry source'];
@@ -418,6 +425,8 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
           const dIdx = findColumnIndex(row, dateAliases);
           const d2Idx = findColumnIndex(row, date2Aliases);
           const d3Idx = findColumnIndex(row, date3Aliases);
+          const d4Idx = findColumnIndex(row, date4Aliases);
+          const d5Idx = findColumnIndex(row, date5Aliases);
           
           const cpIdx = findColumnIndex(row, cpFirmAliases);
           const lsIdx = findColumnIndex(row, leadSourceAliases);
@@ -431,6 +440,8 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
             visitDateIdx = dIdx;
             visitDate2Idx = d2Idx;
             visitDate3Idx = d3Idx;
+            visitDate4Idx = d4Idx;
+            visitDate5Idx = d5Idx;
             cpFirmNameIdx = cpIdx;
             leadSourceIdx = lsIdx;
             subSourceIdx = ssIdx;
@@ -461,6 +472,15 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
           const row = rawRows[i];
           if (!row || row.length === 0) continue;
 
+          // GLOBAL EXCLUSION CHECK
+          // Exclude rows if any cell contains "metro", "test", or "ramesh bodke"
+          const isExcluded = row.some(cell => {
+             if (!cell) return false;
+             const s = String(cell).toLowerCase();
+             return s.includes('metro') || s.includes('test') || s.includes('ramesh bodke');
+          });
+          if (isExcluded) continue;
+
           // RELAXED CHECK: If Assigned To is empty, treat as "Unassigned"
           const rawAssigned = row[assignedToIdx];
           const assignedStr = rawAssigned ? String(rawAssigned).trim() : "Unassigned";
@@ -484,10 +504,7 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
           }
 
           const name = row[nameIdx] ? String(row[nameIdx]).trim() : '-';
-          const nameLower = name.toLowerCase();
-          // Filter if name contains 'test'
-          if (nameLower.includes('test')) continue;
-
+          
           let state = (stateIdx !== -1 && row[stateIdx]) ? String(row[stateIdx]).trim() : '-';
           if (state.toLowerCase() === 're_visit_done') state = 'Revisit Done';
           // REMOVED BOOKED FILTER: Now including Booked records
@@ -497,12 +514,14 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
           const d1 = visitDateIdx !== -1 ? parseDate(row[visitDateIdx]) : null;
           const d2 = visitDate2Idx !== -1 ? parseDate(row[visitDate2Idx]) : null;
           const d3 = visitDate3Idx !== -1 ? parseDate(row[visitDate3Idx]) : null;
+          const d4 = visitDate4Idx !== -1 ? parseDate(row[visitDate4Idx]) : null;
+          const d5 = visitDate5Idx !== -1 ? parseDate(row[visitDate5Idx]) : null;
 
           let selectedDate: Date | null = null;
 
           // 2. Filter logic
           if (startFilter && endFilter) {
-              const datesToCheck = [d1, d2, d3].filter(d => d !== null) as Date[];
+              const datesToCheck = [d1, d2, d3, d4, d5].filter(d => d !== null) as Date[];
               // Keep dates within range
               const datesInRange = datesToCheck.filter(d => d >= startFilter && d <= endFilter);
               
@@ -517,7 +536,7 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
           } else {
               // No manual range provided
               // Default to latest available date among the columns
-              const datesToCheck = [d1, d2, d3].filter(d => d !== null) as Date[];
+              const datesToCheck = [d1, d2, d3, d4, d5].filter(d => d !== null) as Date[];
               if (datesToCheck.length > 0) {
                    datesToCheck.sort((a,b) => b.getTime() - a.getTime());
                    selectedDate = datesToCheck[0];
@@ -543,6 +562,8 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
             date: d1 ? formatDate(d1) : '-',
             date2: d2 ? formatDate(d2) : '-',
             date3: d3 ? formatDate(d3) : '-',
+            date4: d4 ? formatDate(d4) : '-',
+            date5: d5 ? formatDate(d5) : '-',
             rawDateVal: selectedDate,
             sortDate: d1 // Store 1st visit date for sorting
           });
@@ -584,9 +605,6 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
           const finalStartDateStr = manualStartFormatted || autoStartDateStr;
           const finalEndDateStr = manualEndFormatted || autoEndDateStr;
 
-          // NOTE: Rows are now sorted by Visit Date. Do not re-sort by State.
-          // rows.sort((a, b) => a.state.localeCompare(b.state)); // REMOVED
-
           const summaryStats: Record<string, TeamCounts> = {};
           const sourceStats: Record<string, TeamCounts> = {};
 
@@ -604,9 +622,13 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
              incrementStats(summaryStats, r.state, isPresales);
              incrementStats(sourceStats, r.source, isPresales);
 
-             // Revisit Logic: Check 3rd, if blank check 2nd
+             // Revisit Logic: Check 5th, 4th, 3rd, 2nd
              let isRevisit = false;
-             if (r.date3 && r.date3 !== '-') {
+             if (r.date5 && r.date5 !== '-') {
+                 isRevisit = true;
+             } else if (r.date4 && r.date4 !== '-') {
+                 isRevisit = true;
+             } else if (r.date3 && r.date3 !== '-') {
                  isRevisit = true;
              } else if (r.date2 && r.date2 !== '-') {
                  isRevisit = true;
