@@ -397,6 +397,7 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
         let nameIdx = -1, stateIdx = -1, assignedToIdx = -1;
         let visitDateIdx = -1, visitDate2Idx = -1, visitDate3Idx = -1, visitDate4Idx = -1, visitDate5Idx = -1;
         let cpFirmNameIdx = -1, leadSourceIdx = -1, subSourceIdx = -1;
+        let projectIdx = -1;
 
         // PRIORITIZE "Name" specifically
         const nameAliases = ['name', 'visitor name', 'lead name', 'customer name', 'full name', 'client name'];
@@ -412,6 +413,8 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
         const cpFirmAliases = ['cp firm name', 'cp firm name (v)', 'cp name', 'channel partner firm name'];
         const leadSourceAliases = ['lead source', 'lead source (f)', 'source', 'source of lead', 'enquiry source'];
         const subSourceAliases = ['sub source', 'sub source (u)', 'sub_source', 'subsource'];
+        
+        const projectAliases = ['project', 'project name', 'project (af)', 'project(af)'];
 
         // Use new findColumnIndex logic to respect priority of aliases
         for (let i = 0; i < Math.min(100, rawRows.length); i++) {
@@ -431,6 +434,8 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
           const cpIdx = findColumnIndex(row, cpFirmAliases);
           const lsIdx = findColumnIndex(row, leadSourceAliases);
           const ssIdx = findColumnIndex(row, subSourceAliases);
+          
+          const pIdx = findColumnIndex(row, projectAliases);
 
           if (nIdx !== -1 && aIdx !== -1) {
             headerIndex = i;
@@ -445,6 +450,7 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
             cpFirmNameIdx = cpIdx;
             leadSourceIdx = lsIdx;
             subSourceIdx = ssIdx;
+            projectIdx = pIdx;
             break;
           }
         }
@@ -486,21 +492,42 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
           const assignedStr = rawAssigned ? String(rawAssigned).trim() : "Unassigned";
           const assignedLower = assignedStr.toLowerCase();
 
-          // Fuzzy match / Check mapping
-          let matchedUserKey = Object.keys(normalizedMapping).find(k => {
-            return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
-          });
-
-          // Fallback if not found: use DEFAULT_SITE or group under "General"
+          // Initialize siteName and team
           let siteName = DEFAULT_SITE;
           let team = '-';
-          
-          if (matchedUserKey) {
-            siteName = normalizedMapping[matchedUserKey];
-             // Try to find team using matched key
-            if (normalizedTeamMapping[matchedUserKey]) {
+
+          // Special logic for specific users: Manisha Singh, Smita Kad, Sejal Satav
+          const specificUsers = ["manisha singh", "smita kad", "sejal satav"];
+          const isSpecificUser = specificUsers.some(u => assignedLower.includes(u));
+
+          if (isSpecificUser) {
+             // Look into 'Project' column for keywords
+             const rawProject = projectIdx !== -1 ? row[projectIdx] : '';
+             const projectVal = String(rawProject).toLowerCase().trim();
+             
+             if (projectVal.includes('kairos')) siteName = 'Kairos';
+             else if (projectVal.includes('aqua') || projectVal.includes('aqualife')) siteName = 'Aqua Life';
+             else if (projectVal.includes('milestone')) siteName = 'Milestone';
+             else if (projectVal.includes('statement')) siteName = 'Statement';
+             
+             // Try to assign team based on user mapping if available, otherwise default
+             let matchedUserKey = Object.keys(normalizedTeamMapping).find(k => assignedLower.includes(k));
+             if (matchedUserKey) {
                 team = normalizedTeamMapping[matchedUserKey];
-            }
+             }
+          } else {
+              // Standard Fuzzy match / Check mapping
+              let matchedUserKey = Object.keys(normalizedMapping).find(k => {
+                return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
+              });
+              
+              if (matchedUserKey) {
+                siteName = normalizedMapping[matchedUserKey];
+                 // Try to find team using matched key
+                if (normalizedTeamMapping[matchedUserKey]) {
+                    team = normalizedTeamMapping[matchedUserKey];
+                }
+              }
           }
 
           const name = row[nameIdx] ? String(row[nameIdx]).trim() : '-';
