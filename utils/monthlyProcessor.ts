@@ -408,7 +408,7 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
         const leadSourceAliases = ['lead source', 'lead source (f)', 'source', 'source of lead', 'enquiry source'];
         const subSourceAliases = ['sub source', 'sub source (u)', 'sub_source', 'subsource'];
         
-        const projectAliases = ['project', 'project name', 'project (af)', 'project(af)'];
+        const projectAliases = ['project', 'project name', 'project (af)', 'project(af)', 'project (af', 'project(af'];
 
         for (let i = 0; i < Math.min(100, rawRows.length); i++) {
           const row = rawRows[i];
