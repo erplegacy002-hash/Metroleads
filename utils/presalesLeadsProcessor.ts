@@ -1,6 +1,7 @@
 import { read, utils } from 'xlsx';
 import JSZip from 'jszip';
-import { toPng } from 'html-to-image';
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { GeneratedImage, ProcessResponse } from '../types';
 import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './projectMapping';
 
@@ -61,71 +62,104 @@ interface AggregatedLead {
   count: number;
 }
 
-async function generatePresalesLeadsImage(
+async function generatePresalesLeadsPDF(
   siteName: string, 
   rows: AggregatedLead[], 
   reportTitle: string
 ): Promise<string> {
-  const container = document.createElement('div');
-  container.style.position = 'absolute';
-  container.style.left = '-9999px';
-  container.style.top = '0';
-  container.style.width = '1000px'; // Fixed width for consistent output
-  container.style.backgroundColor = '#ffffff';
+  const doc = new jsPDF();
 
+  // --- Header ---
+  const pageWidth = doc.internal.pageSize.width;
+  
+  // Title
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("PRESALES LEADS", pageWidth / 2, 15, { align: "center" });
+  
+  doc.setLineWidth(0.5);
+  doc.line(pageWidth / 2 - 25, 18, pageWidth / 2 + 25, 18);
+  
+  // Site Name
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text(siteName.toUpperCase(), pageWidth / 2, 26, { align: "center" });
+
+  doc.setLineWidth(0.5);
+  doc.line(pageWidth / 2 - 25, 29, pageWidth / 2 + 25, 29);
+
+  // Report Title
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text(reportTitle, pageWidth / 2, 36, { align: "center" });
+
+  // --- Table Data ---
+  
+  // Calculate total leads
   const totalLeads = rows.reduce((acc, curr) => acc + curr.count, 0);
 
-  const rowsHtml = rows.map((row, index) => `
-    <tr>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${index + 1}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 11px; text-align: left; color: #000000;">${row.user}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.state}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.pageName}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.source}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 11px; text-align: center; font-weight: 700; color: #000000;">${row.count}</td>
-    </tr>
-  `).join('');
+  const tableBody = rows.map((row, index) => [
+    index + 1,
+    row.user,
+    row.state,
+    row.pageName,
+    row.source,
+    row.count
+  ]);
 
-  container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box; font-family: 'Cormorant Garamond', serif;">
-      <div style="padding: 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 900; color: #000000; text-transform: uppercase;">PRESALES LEADS</div>
-        <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
-        <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 12px; font-weight: 700; color: #000000;">${reportTitle}</div>
-      </div>
-      
-      <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
-        <thead>
-          <tr style="background-color: #f3f4f6;">
-            <th style="padding: 10px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; color: #000000; font-weight: 900;">Sr. No.</th>
-            <th style="padding: 10px 12px; border: 1px solid #000000; font-size: 12px; text-align: left; color: #000000; font-weight: 900;">User (Assigned to)</th>
-            <th style="padding: 10px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; color: #000000; font-weight: 900;">Lead State</th>
-            <th style="padding: 10px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; color: #000000; font-weight: 900;">Page Name</th>
-            <th style="padding: 10px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; color: #000000; font-weight: 900;">Lead Source</th>
-            <th style="padding: 10px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; color: #000000; font-weight: 900;">Lead Count</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowsHtml}
-          <tr style="background-color: #f9fafb; font-weight: 900;">
-            <td colspan="4" style="padding: 10px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; color: #000000;">TOTAL</td>
-            <td colspan="2" style="padding: 10px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; color: #000000;">${totalLeads}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  `;
+  // Add Total Row
+  tableBody.push([
+    "",
+    "",
+    "",
+    "",
+    "TOTAL",
+    totalLeads
+  ]);
 
-  document.body.appendChild(container);
-  await new Promise(resolve => setTimeout(resolve, 600));
+  // --- Generate Table ---
+  autoTable(doc, {
+    startY: 42,
+    head: [['Sr. No.', 'User (Assigned to)', 'Lead State', 'Page Name', 'Lead Source', 'Lead Count']],
+    body: tableBody,
+    theme: 'grid',
+    styles: {
+        fontSize: 10,
+        font: "helvetica",
+        textColor: [0, 0, 0],
+        lineColor: [0, 0, 0],
+        lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [243, 244, 246], // #f3f4f6
+      textColor: [0, 0, 0],
+      fontStyle: 'bold',
+      halign: 'center',
+      valign: 'middle',
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 20 },
+      1: { halign: 'left' },
+      2: { halign: 'center' },
+      3: { halign: 'center' },
+      4: { halign: 'center' },
+      5: { halign: 'center', fontStyle: 'bold', cellWidth: 30 }
+    },
+    didParseCell: function (data: any) {
+        // Identify the last row (Total row)
+        if (data.row.index === tableBody.length - 1) {
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.fillColor = [249, 250, 251]; // #f9fafb
+            
+            // Align "TOTAL" label to the right
+            if (data.column.index === 4) { 
+               data.cell.styles.halign = 'right';
+            }
+        }
+    }
+  });
 
-  try {
-    return await toPng(container, { quality: 0.95, pixelRatio: 2 });
-  } finally {
-    if (document.body.contains(container)) document.body.removeChild(container);
-  }
+  return doc.output('datauristring');
 }
 
 // --- Main Processor ---
@@ -262,16 +296,16 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
         const reportTitle = "SUMMARY REPORT";
         const siteName = "Consolidated Leads";
 
-        // Generate Image directly
-        const imageDataUrl = await generatePresalesLeadsImage(siteName, rows, reportTitle);
+        // Generate PDF directly
+        const pdfDataUrl = await generatePresalesLeadsPDF(siteName, rows, reportTitle);
         
         const images: GeneratedImage[] = [];
         const zip = new JSZip();
 
-        const filename = `presales_leads_summary.png`;
+        const filename = `presales_leads_summary.pdf`;
         
-        images.push({ project_name: "Presales Leads Summary", image_url: imageDataUrl, filename: filename });
-        zip.file(filename, imageDataUrl.split(',')[1], { base64: true });
+        images.push({ project_name: "Presales Leads Summary", image_url: pdfDataUrl, filename: filename });
+        zip.file(filename, pdfDataUrl.split(',')[1], { base64: true });
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
         resolve({ images, zip_url: URL.createObjectURL(zipBlob), message: "Success" });

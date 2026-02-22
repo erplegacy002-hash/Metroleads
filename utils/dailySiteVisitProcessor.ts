@@ -66,9 +66,8 @@ function formatDate(date: Date): string {
 }
 
 function determineSource(cpData: any, sourceData: any, subSourceData: any): string {
-  // 1. If CP Firm Name exists and is not '-', it is a Channel Partner
-  const cpFirm = cpData ? String(cpData).trim() : '';
-  if (cpFirm.length > 0 && cpFirm !== '-') {
+  // 1. If CP Firm Name exists, it is a Channel Partner
+  if (cpData && String(cpData).trim().length > 0) {
     return 'Channel Partner';
   }
 
@@ -115,7 +114,7 @@ async function generateDailyListImage(siteName: string, rows: any[], dateLabel: 
     width: '1250px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
-    fontFamily: "'Inter', sans-serif",
+    fontFamily: "'Cinzel', serif",
     color: '#000000', 
     zIndex: '-9999',
     pointerEvents: 'none'
@@ -124,17 +123,17 @@ async function generateDailyListImage(siteName: string, rows: any[], dateLabel: 
   if (rows.length === 0) return '';
 
   const headerHtml = `
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 40px;">Sr. No.</th>
-    <th style="padding: 6px 4px; text-align: left; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Visitor Name</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 80px;">Team</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 100px;">Source</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 140px;">CP Firm Name</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 85px;">Visit Date</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 85px;">2nd Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 85px;">3rd Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 85px;">4th Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 85px;">5th Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 110px;">State</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 40px;">Sr. No.</th>
+    <th style="padding: 6px 4px; text-align: left; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Visitor Name</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 80px;">Team</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 100px;">Source</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 140px;">CP Firm Name</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">Visit Date</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">2nd Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">3rd Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">4th Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">5th Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 110px;">State</th>
   `;
 
   const rowsHtml = rows.map((row, index) => `
@@ -154,9 +153,9 @@ async function generateDailyListImage(siteName: string, rows: any[], dateLabel: 
   `).join('');
 
   container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box; font-family: 'Cinzel Decorative', cursive;">
+    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 900; color: #000000; text-transform: uppercase;">SITE VISIT</div>
+        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">SITE VISIT</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
@@ -209,7 +208,7 @@ async function generateDailySummaryImage(
     width: '450px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
-    fontFamily: "'Inter', sans-serif",
+    fontFamily: "'Cinzel', serif",
     color: '#000000', 
     zIndex: '-9999',
     pointerEvents: 'none'
@@ -287,9 +286,9 @@ async function generateDailySummaryImage(
   }).join('');
 
   container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box; font-family: 'Cinzel Decorative', cursive;">
+    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 900; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
+        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 16px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
@@ -319,13 +318,13 @@ async function generateDailySummaryImage(
 
       <div style="padding: 0 15px 15px 15px;">
         <!-- Lead Status Summary -->
-        <div style="font-size: 12px; font-weight: 900; color: #000000; text-transform: uppercase; margin-bottom: 6px;">LEAD STATUS SUMMARY</div>
+        <div style="font-size: 12px; font-weight: 800; color: #000000; text-transform: uppercase; margin-bottom: 6px;">LEAD STATUS SUMMARY</div>
         <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; margin-bottom: 20px;">
           <thead>
             <tr>
-              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">State</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Presales</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
+              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">State</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Presales</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
             </tr>
           </thead>
           <tbody>
@@ -339,13 +338,13 @@ async function generateDailySummaryImage(
         </table>
 
         <!-- Source Summary -->
-        <div style="font-size: 12px; font-weight: 900; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
+        <div style="font-size: 12px; font-weight: 800; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
         <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
           <thead>
             <tr>
-              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Source</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Presales</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
+              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Source</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Presales</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
             </tr>
           </thead>
           <tbody>

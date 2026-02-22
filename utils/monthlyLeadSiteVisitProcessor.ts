@@ -66,9 +66,7 @@ function formatDate(date: Date): string {
 }
 
 function determineSource(cpData: any, sourceData: any, subSourceData: any): string {
-  // 1. If CP Firm Name exists and is not '-', it is a Channel Partner
-  const cpFirm = cpData ? String(cpData).trim() : '';
-  if (cpFirm.length > 0 && cpFirm !== '-') {
+  if (cpData && String(cpData).trim().length > 0) {
     return 'Channel Partner';
   }
 
@@ -127,7 +125,7 @@ async function generateMonthlyLeadSummaryImage(
     width: '450px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
-    fontFamily: "'Inter', sans-serif",
+    fontFamily: "'Cinzel', serif",
     color: '#000000', 
     zIndex: '-9999',
     pointerEvents: 'none'
@@ -170,9 +168,9 @@ async function generateMonthlyLeadSummaryImage(
   }).join('');
 
   container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box; font-family: 'Cinzel Decorative', cursive;">
+    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 900; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
+        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 16px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
@@ -191,13 +189,13 @@ async function generateMonthlyLeadSummaryImage(
         <!-- Lead Status Summary Removed for this report -->
 
         <!-- Source Summary -->
-        <div style="font-size: 12px; font-weight: 900; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
+        <div style="font-size: 12px; font-weight: 800; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
         <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
           <thead>
             <tr>
-              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Source</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Leads</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Site Visits</th>
+              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Source</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Leads</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Site Visits</th>
             </tr>
           </thead>
           <tbody>
