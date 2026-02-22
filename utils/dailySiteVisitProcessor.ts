@@ -66,8 +66,9 @@ function formatDate(date: Date): string {
 }
 
 function determineSource(cpData: any, sourceData: any, subSourceData: any): string {
-  // 1. If CP Firm Name exists, it is a Channel Partner
-  if (cpData && String(cpData).trim().length > 0) {
+  // 1. If CP Firm Name exists and is not '-', it is a Channel Partner
+  const cpFirm = cpData ? String(cpData).trim() : '';
+  if (cpFirm.length > 0 && cpFirm !== '-') {
     return 'Channel Partner';
   }
 
@@ -114,7 +115,7 @@ async function generateDailyListImage(siteName: string, rows: any[], dateLabel: 
     width: '1250px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
-    fontFamily: 'sans-serif',
+    fontFamily: "'Inter', sans-serif",
     color: '#000000', 
     zIndex: '-9999',
     pointerEvents: 'none'
@@ -123,17 +124,17 @@ async function generateDailyListImage(siteName: string, rows: any[], dateLabel: 
   if (rows.length === 0) return '';
 
   const headerHtml = `
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 40px;">Sr. No.</th>
-    <th style="padding: 6px 4px; text-align: left; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Visitor Name</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 80px;">Team</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 100px;">Source</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 140px;">CP Firm Name</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">Visit Date</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">2nd Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">3rd Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">4th Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">5th Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 110px;">State</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 40px;">Sr. No.</th>
+    <th style="padding: 6px 4px; text-align: left; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Visitor Name</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 80px;">Team</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 100px;">Source</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 140px;">CP Firm Name</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 85px;">Visit Date</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 85px;">2nd Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 85px;">3rd Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 85px;">4th Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 85px;">5th Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; width: 110px;">State</th>
   `;
 
   const rowsHtml = rows.map((row, index) => `
@@ -155,7 +156,7 @@ async function generateDailyListImage(siteName: string, rows: any[], dateLabel: 
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">SITE VISIT</div>
+        <div style="font-size: 14px; font-weight: 900; color: #000000; text-transform: uppercase;">SITE VISIT</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
@@ -208,7 +209,7 @@ async function generateDailySummaryImage(
     width: '450px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
-    fontFamily: 'sans-serif',
+    fontFamily: "'Inter', sans-serif",
     color: '#000000', 
     zIndex: '-9999',
     pointerEvents: 'none'
@@ -288,7 +289,7 @@ async function generateDailySummaryImage(
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
+        <div style="font-size: 14px; font-weight: 900; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 16px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
@@ -318,13 +319,13 @@ async function generateDailySummaryImage(
 
       <div style="padding: 0 15px 15px 15px;">
         <!-- Lead Status Summary -->
-        <div style="font-size: 12px; font-weight: 800; color: #000000; text-transform: uppercase; margin-bottom: 6px;">LEAD STATUS SUMMARY</div>
+        <div style="font-size: 12px; font-weight: 900; color: #000000; text-transform: uppercase; margin-bottom: 6px;">LEAD STATUS SUMMARY</div>
         <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; margin-bottom: 20px;">
           <thead>
             <tr>
-              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">State</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Presales</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
+              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">State</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Presales</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
             </tr>
           </thead>
           <tbody>
@@ -338,13 +339,13 @@ async function generateDailySummaryImage(
         </table>
 
         <!-- Source Summary -->
-        <div style="font-size: 12px; font-weight: 800; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
+        <div style="font-size: 12px; font-weight: 900; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
         <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
           <thead>
             <tr>
-              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Source</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Presales</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
+              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Source</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Presales</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
             </tr>
           </thead>
           <tbody>
@@ -496,38 +497,27 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
           let siteName = DEFAULT_SITE;
           let team = '-';
 
-          // Special logic for specific users: Manisha Singh, Smita Kad, Sejal Satav
-          const specificUsers = ["manisha singh", "smita kad", "sejal satav"];
-          const isSpecificUser = specificUsers.some(u => assignedLower.includes(u));
+          // 1. Try projectmapping.ts first
+          let matchedUserKey = Object.keys(normalizedMapping).find(k => {
+            return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
+          });
+          if (matchedUserKey) {
+            siteName = normalizedMapping[matchedUserKey];
+          }
 
-          if (isSpecificUser) {
-             // Look into 'Project' column for keywords
-             const rawProject = projectIdx !== -1 ? row[projectIdx] : '';
-             const projectVal = String(rawProject).toLowerCase().trim();
-             
-             if (projectVal.includes('kairos')) siteName = 'Kairos';
-             else if (projectVal.includes('aqua') || projectVal.includes('aqualife')) siteName = 'Aqua Life';
-             else if (projectVal.includes('milestone')) siteName = 'Milestone';
-             else if (projectVal.includes('statement')) siteName = 'Statement';
-             
-             // Try to assign team based on user mapping if available, otherwise default
-             let matchedUserKey = Object.keys(normalizedTeamMapping).find(k => assignedLower.includes(k));
-             if (matchedUserKey) {
-                team = normalizedTeamMapping[matchedUserKey];
-             }
-          } else {
-              // Standard Fuzzy match / Check mapping
-              let matchedUserKey = Object.keys(normalizedMapping).find(k => {
-                return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
-              });
-              
-              if (matchedUserKey) {
-                siteName = normalizedMapping[matchedUserKey];
-                 // Try to find team using matched key
-                if (normalizedTeamMapping[matchedUserKey]) {
-                    team = normalizedTeamMapping[matchedUserKey];
-                }
-              }
+          // 2. If still default, check Project Column
+          if (siteName === DEFAULT_SITE) {
+            const rawProject = projectIdx !== -1 ? String(row[projectIdx]).toLowerCase().trim() : '';
+            if (rawProject.includes('kairos')) siteName = 'Kairos';
+            else if (rawProject.includes('aqua') || rawProject.includes('aqualife')) siteName = 'Aqua Life';
+            else if (rawProject.includes('milestone')) siteName = 'Milestone';
+            else if (rawProject.includes('statement')) siteName = 'Statement';
+          }
+
+          // Always try to find team using assignedLower
+          let matchedTeamKey = Object.keys(normalizedTeamMapping).find(k => assignedLower.includes(k));
+          if (matchedTeamKey) {
+              team = normalizedTeamMapping[matchedTeamKey];
           }
 
           const name = row[nameIdx] ? String(row[nameIdx]).trim() : '-';

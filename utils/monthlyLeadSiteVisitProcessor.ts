@@ -1,6 +1,7 @@
 import { read, utils } from 'xlsx';
 import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
+import { jsPDF } from 'jspdf';
 import { GeneratedImage, ProcessResponse } from '../types';
 import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './projectMapping';
 
@@ -65,7 +66,9 @@ function formatDate(date: Date): string {
 }
 
 function determineSource(cpData: any, sourceData: any, subSourceData: any): string {
-  if (cpData && String(cpData).trim().length > 0) {
+  // 1. If CP Firm Name exists and is not '-', it is a Channel Partner
+  const cpFirm = cpData ? String(cpData).trim() : '';
+  if (cpFirm.length > 0 && cpFirm !== '-') {
     return 'Channel Partner';
   }
 
@@ -124,7 +127,7 @@ async function generateMonthlyLeadSummaryImage(
     width: '450px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
-    fontFamily: 'sans-serif',
+    fontFamily: "'Inter', sans-serif",
     color: '#000000', 
     zIndex: '-9999',
     pointerEvents: 'none'
@@ -169,7 +172,7 @@ async function generateMonthlyLeadSummaryImage(
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
+        <div style="font-size: 14px; font-weight: 900; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 16px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
@@ -188,13 +191,13 @@ async function generateMonthlyLeadSummaryImage(
         <!-- Lead Status Summary Removed for this report -->
 
         <!-- Source Summary -->
-        <div style="font-size: 12px; font-weight: 800; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
+        <div style="font-size: 12px; font-weight: 900; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
         <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
           <thead>
             <tr>
-              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Source</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Leads</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Site Visits</th>
+              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Source</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Leads</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Site Visits</th>
             </tr>
           </thead>
           <tbody>
@@ -341,38 +344,27 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
           let siteName = DEFAULT_SITE;
           let team = '-';
 
-          // Special logic for specific users: Manisha Singh, Smita Kad, Sejal Satav
-          const specificUsers = ["manisha singh", "smita kad", "sejal satav"];
-          const isSpecificUser = specificUsers.some(u => assignedLower.includes(u));
+          // 1. Try projectmapping.ts first
+          let matchedUserKey = Object.keys(normalizedMapping).find(k => {
+            return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
+          });
+          if (matchedUserKey) {
+            siteName = normalizedMapping[matchedUserKey];
+          }
 
-          if (isSpecificUser) {
-             // Look into 'Project' column for keywords
-             const rawProject = projectIdx !== -1 ? row[projectIdx] : '';
-             const projectVal = String(rawProject).toLowerCase().trim();
-             
-             if (projectVal.includes('kairos')) siteName = 'Kairos';
-             else if (projectVal.includes('aqua') || projectVal.includes('aqualife')) siteName = 'Aqua Life';
-             else if (projectVal.includes('milestone')) siteName = 'Milestone';
-             else if (projectVal.includes('statement')) siteName = 'Statement';
-             
-             // Try to assign team based on user mapping if available, otherwise default
-             let matchedUserKey = Object.keys(normalizedTeamMapping).find(k => assignedLower.includes(k));
-             if (matchedUserKey) {
-                team = normalizedTeamMapping[matchedUserKey];
-             }
-          } else {
-              // Standard Fuzzy match / Check mapping
-              let matchedUserKey = Object.keys(normalizedMapping).find(k => {
-                return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
-              });
-              
-              if (matchedUserKey) {
-                siteName = normalizedMapping[matchedUserKey];
-                 // Try to find team using matched key
-                if (normalizedTeamMapping[matchedUserKey]) {
-                    team = normalizedTeamMapping[matchedUserKey];
-                }
-              }
+          // 2. If still default, check Project Column
+          if (siteName === DEFAULT_SITE) {
+            const rawProject = projectIdx !== -1 ? String(row[projectIdx]).toLowerCase().trim() : '';
+            if (rawProject.includes('kairos')) siteName = 'Kairos';
+            else if (rawProject.includes('aqua') || rawProject.includes('aqualife')) siteName = 'Aqua Life';
+            else if (rawProject.includes('milestone')) siteName = 'Milestone';
+            else if (rawProject.includes('statement')) siteName = 'Statement';
+          }
+
+          // Always try to find team using assignedLower
+          let matchedTeamKey = Object.keys(normalizedTeamMapping).find(k => assignedLower.includes(k));
+          if (matchedTeamKey) {
+              team = normalizedTeamMapping[matchedTeamKey];
           }
 
           const name = row[nameIdx] ? String(row[nameIdx]).trim() : '-';
