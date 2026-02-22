@@ -188,7 +188,7 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
   `).join('');
 
   container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
+    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box; font-family: 'Cinzel Decorative', cursive;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
         <div style="font-size: 14px; font-weight: 900; color: #000000; text-transform: uppercase;">CALLING REPORT</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>

@@ -106,7 +106,7 @@ const App: React.FC = () => {
   const showDateInputs = activeTab !== 'Daily Report Processor' && activeTab !== 'Presales Leads Report';
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 font-cinzel">
+    <div className="min-h-screen bg-slate-50 pb-20 font-sans">
       {/* Branded Header - Logos Centered, Badge Top Right */}
       <header className="bg-white border-b border-amber-200/50 sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 sm:h-32 flex items-center justify-center relative">
@@ -121,7 +121,7 @@ const App: React.FC = () => {
             />
             
             {/* X Separator */}
-            <span className="text-xl sm:text-4xl font-cinzel-dec text-slate-300 font-bold">X</span>
+            <span className="text-xl sm:text-4xl font-serif text-slate-300 font-bold italic">X</span>
             
             {/* Legacy Logo - Using provided GitHub raw format */}
             <img 
@@ -161,7 +161,7 @@ const App: React.FC = () => {
                   `}
                 >
                   <Icon className={`w-4 h-4 ${isActive ? 'text-[#d4af37]' : ''}`} />
-                  <span className="font-inter uppercase tracking-wide text-xs sm:text-sm font-bold">{tab.label}</span>
+                  <span className="font-montserrat uppercase tracking-widest text-[10px] sm:text-xs font-bold">{tab.label}</span>
                 </button>
               );
             })}
@@ -174,10 +174,10 @@ const App: React.FC = () => {
         {isProcessorTab ? (
           <div className="animate-in fade-in duration-500">
             <div className="text-center mb-12">
-              <h2 className="text-3xl sm:text-5xl font-cinzel-dec font-bold text-slate-900 tracking-tight mb-4">
+              <h2 className="text-3xl sm:text-6xl font-serif font-bold text-slate-900 tracking-tight mb-4 italic">
                 {activeTab}
               </h2>
-              <p className="text-lg text-slate-600 max-w-2xl mx-auto font-inter">
+              <p className="text-lg text-slate-600 max-w-2xl mx-auto font-serif italic opacity-80">
                 {activeTab === 'Monthly Site Visit Report' 
                   ? 'Automated monthly site visit summaries grouped by project.'
                   : activeTab === 'Daily Site Visit Report'
@@ -270,7 +270,7 @@ const App: React.FC = () => {
             {result && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div className="flex items-center justify-between border-b border-amber-200 pb-4">
-                  <h3 className="text-2xl font-cinzel-dec font-bold text-slate-800">
+                  <h3 className="text-2xl font-serif font-bold text-slate-800 italic">
                     Generated Tables ({result.images.length})
                   </h3>
                   <a
