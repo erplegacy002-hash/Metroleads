@@ -1,7 +1,6 @@
 import { read, utils } from 'xlsx';
 import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
-import { jsPDF } from 'jspdf';
 import { GeneratedImage, ProcessResponse } from '../types';
 import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './projectMapping';
 
@@ -103,107 +102,83 @@ function determineSource(cpData: any, sourceData: any, subSourceData: any): stri
 
 // --- Image Generation: Main List ---
 
-// --- PDF Generation: Main List ---
+async function generateWeeklyListImage(siteName: string, rows: any[], reportTitle: string, startDate: string, endDate: string): Promise<string> {
+  const container = document.createElement('div');
+  Object.assign(container.style, {
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    width: '1250px', 
+    backgroundColor: '#ffffff', 
+    padding: '15px', 
+    fontFamily: 'sans-serif',
+    color: '#000000', 
+    zIndex: '-9999',
+    pointerEvents: 'none'
+  });
+  
+  if (rows.length === 0) return '';
 
-async function generateWeeklyListPDF(siteName: string, rows: any[], dateLabel: string, startDate: string, endDate: string): Promise<string> {
-  const ROWS_PER_PAGE = 22;
-  const pages = [];
-  for (let i = 0; i < rows.length; i += ROWS_PER_PAGE) {
-    pages.push(rows.slice(i, i + ROWS_PER_PAGE));
-  }
+  const headerHtml = `
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 40px;">Sr. No.</th>
+    <th style="padding: 6px 4px; text-align: left; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Visitor Name</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 80px;">Team</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 100px;">Source</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 140px;">CP Firm Name</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">Visit Date</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">2nd Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">3rd Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">4th Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">5th Visit</th>
+    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 110px;">State</th>
+  `;
 
-  const pdf = new jsPDF('l', 'pt', 'a4');
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
+  const rowsHtml = rows.map((row, index) => `
+    <tr>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${index + 1}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: left; color: #000000; font-weight: 500;">${row.name}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.team}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.source}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.cpFirmName}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date2}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date3}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date4}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date5}</td>
+      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.state}</td>
+    </tr>
+  `).join('');
 
-  for (let p = 0; p < pages.length; p++) {
-    const pageRows = pages[p];
-    const container = document.createElement('div');
-    Object.assign(container.style, {
-      position: 'fixed',
-      top: '0',
-      left: '0',
-      width: '1120px',
-      backgroundColor: '#ffffff',
-      padding: '30px',
-      fontFamily: "'Cinzel', serif",
-      color: '#000000',
-      zIndex: '-9999',
-      pointerEvents: 'none',
-      boxSizing: 'border-box'
-    });
-
-    const headerHtml = `
-      <th style="padding: 8px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; background-color: #f3f4f6; width: 40px;">Sr. No.</th>
-      <th style="padding: 8px 4px; text-align: left; border: 1px solid #000000; font-size: 11px; font-weight: 700; background-color: #f3f4f6;">Visitor Name</th>
-      <th style="padding: 8px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; background-color: #f3f4f6; width: 80px;">Team</th>
-      <th style="padding: 8px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; background-color: #f3f4f6; width: 100px;">Source</th>
-      <th style="padding: 8px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; background-color: #f3f4f6; width: 140px;">CP Firm Name</th>
-      <th style="padding: 8px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; background-color: #f3f4f6; width: 85px;">Visit Date</th>
-      <th style="padding: 8px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; background-color: #f3f4f6; width: 85px;">2nd Visit</th>
-      <th style="padding: 8px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; background-color: #f3f4f6; width: 85px;">3rd Visit</th>
-      <th style="padding: 8px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; background-color: #f3f4f6; width: 85px;">4th Visit</th>
-      <th style="padding: 8px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; background-color: #f3f4f6; width: 85px;">5th Visit</th>
-      <th style="padding: 8px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; background-color: #f3f4f6; width: 110px;">State</th>
-    `;
-
-    const rowsHtml = pageRows.map((row, index) => `
-      <tr>
-        <td style="padding: 6px 6px; border: 1px solid #000000; font-size: 11px; text-align: center;">${(p * ROWS_PER_PAGE) + index + 1}</td>
-        <td style="padding: 6px 6px; border: 1px solid #000000; font-size: 11px; text-align: left; font-weight: 700;">${row.name}</td>
-        <td style="padding: 6px 6px; border: 1px solid #000000; font-size: 11px; text-align: center;">${row.team}</td>
-        <td style="padding: 6px 6px; border: 1px solid #000000; font-size: 11px; text-align: center;">${row.source}</td>
-        <td style="padding: 6px 6px; border: 1px solid #000000; font-size: 11px; text-align: center;">${row.cpFirmName}</td>
-        <td style="padding: 6px 6px; border: 1px solid #000000; font-size: 11px; text-align: center;">${row.date}</td>
-        <td style="padding: 6px 6px; border: 1px solid #000000; font-size: 11px; text-align: center;">${row.date2}</td>
-        <td style="padding: 6px 6px; border: 1px solid #000000; font-size: 11px; text-align: center;">${row.date3}</td>
-        <td style="padding: 6px 6px; border: 1px solid #000000; font-size: 11px; text-align: center;">${row.date4}</td>
-        <td style="padding: 6px 6px; border: 1px solid #000000; font-size: 11px; text-align: center;">${row.date5}</td>
-        <td style="padding: 6px 6px; border: 1px solid #000000; font-size: 11px; text-align: center;">${row.state}</td>
-      </tr>
-    `).join('');
-
-    container.innerHTML = `
-      <div style="background-color: #ffffff; width: 100%; border: 2px solid #000000; box-sizing: border-box; min-height: 750px;">
-        <div style="padding: 20px 15px; text-align: center;">
-          <div style="font-size: 16px; font-weight: 800; text-transform: uppercase;">SITE VISIT</div>
-          <div style="width: 150px; height: 1px; background-color: #000000; margin: 8px auto;"></div>
-          <div style="font-size: 22px; font-weight: 900; text-transform: uppercase;">${siteName}</div>
-          <div style="width: 150px; height: 1px; background-color: #000000; margin: 8px auto;"></div>
-          <div style="font-size: 14px; font-weight: 700;">${dateLabel}</div>
-        </div>
-        
-        <div style="padding: 5px 20px; display: flex; justify-content: space-between; font-size: 12px; font-weight: 700;">
-          <span>Start Date: ${startDate}</span>
-          <span>End Date: ${endDate}</span>
-        </div>
-
-        <div style="padding: 10px 20px;">
-          <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
-            <thead><tr>${headerHtml}</tr></thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
-        </div>
-        
-        <div style="position: absolute; bottom: 20px; right: 30px; font-size: 10px; font-weight: 700;">
-          Page ${p + 1} of ${pages.length}
-        </div>
+  container.innerHTML = `
+    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
+      <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
+        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">SITE VISIT</div>
+        <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
+        <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
+        <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
+        <div style="font-size: 12px; font-weight: 700; color: #000000;">${reportTitle}</div>
       </div>
-    `;
 
-    document.body.appendChild(container);
-    await new Promise(resolve => setTimeout(resolve, 800));
+      <div style="padding: 5px 2px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #000000;">
+        <span>Start Date: ${startDate}</span>
+        <span>End Date: ${endDate}</span>
+      </div>
 
-    try {
-      const imgData = await toPng(container, { quality: 1.0, pixelRatio: 2 });
-      if (p > 0) pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
-    } finally {
-      if (document.body.contains(container)) document.body.removeChild(container);
-    }
+      <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
+        <thead><tr>${headerHtml}</tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+  await new Promise(resolve => setTimeout(resolve, 600));
+
+  try {
+    return await toPng(container, { quality: 0.95, pixelRatio: 2 });
+  } finally {
+    if (document.body.contains(container)) document.body.removeChild(container);
   }
-
-  return pdf.output('datauristring');
 }
 
 // --- Image Generation: Summary ---
@@ -230,7 +205,7 @@ async function generateWeeklySummaryImage(
     width: '450px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
-    fontFamily: "'Cinzel', serif",
+    fontFamily: 'sans-serif',
     color: '#000000', 
     zIndex: '-9999',
     pointerEvents: 'none'
@@ -501,35 +476,46 @@ export async function processWeeklySiteVisitFile(file: File, manualStartDate?: s
           });
           if (isExcluded) continue;
 
-          // Initialize siteName and team
-          let siteName = DEFAULT_SITE;
-          let team = '-';
-
           const rawAssigned = row[assignedToIdx];
           const assignedStr = rawAssigned ? String(rawAssigned).trim() : "Unassigned";
           const assignedLower = assignedStr.toLowerCase();
 
-          // 1. Try projectmapping.ts first
-          let matchedUserKey = Object.keys(normalizedMapping).find(k => {
-            return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
-          });
-          if (matchedUserKey) {
-            siteName = normalizedMapping[matchedUserKey];
-          }
+          // Initialize siteName and team
+          let siteName = DEFAULT_SITE;
+          let team = '-';
 
-          // 2. If still default, check Project Column
-          if (siteName === DEFAULT_SITE) {
-            const rawProject = projectIdx !== -1 ? String(row[projectIdx]).toLowerCase().trim() : '';
-            if (rawProject.includes('kairos')) siteName = 'Kairos';
-            else if (rawProject.includes('aqua') || rawProject.includes('aqualife')) siteName = 'Aqua Life';
-            else if (rawProject.includes('milestone')) siteName = 'Milestone';
-            else if (rawProject.includes('statement')) siteName = 'Statement';
-          }
+          // Special logic for specific users: Manisha Singh, Smita Kad, Sejal Satav
+          const specificUsers = ["manisha singh", "smita kad", "sejal satav"];
+          const isSpecificUser = specificUsers.some(u => assignedLower.includes(u));
 
-          // Always try to find team using assignedLower
-          let matchedTeamKey = Object.keys(normalizedTeamMapping).find(k => assignedLower.includes(k));
-          if (matchedTeamKey) {
-              team = normalizedTeamMapping[matchedTeamKey];
+          if (isSpecificUser) {
+             // Look into 'Project' column for keywords
+             const rawProject = projectIdx !== -1 ? row[projectIdx] : '';
+             const projectVal = String(rawProject).toLowerCase().trim();
+             
+             if (projectVal.includes('kairos')) siteName = 'Kairos';
+             else if (projectVal.includes('aqua') || projectVal.includes('aqualife')) siteName = 'Aqua Life';
+             else if (projectVal.includes('milestone')) siteName = 'Milestone';
+             else if (projectVal.includes('statement')) siteName = 'Statement';
+             
+             // Try to assign team based on user mapping if available, otherwise default
+             let matchedUserKey = Object.keys(normalizedTeamMapping).find(k => assignedLower.includes(k));
+             if (matchedUserKey) {
+                team = normalizedTeamMapping[matchedUserKey];
+             }
+          } else {
+              // Standard Fuzzy match / Check mapping
+              let matchedUserKey = Object.keys(normalizedMapping).find(k => {
+                return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
+              });
+              
+              if (matchedUserKey) {
+                siteName = normalizedMapping[matchedUserKey];
+                 // Try to find team using matched key
+                if (normalizedTeamMapping[matchedUserKey]) {
+                    team = normalizedTeamMapping[matchedUserKey];
+                }
+              }
           }
 
           const name = row[nameIdx] ? String(row[nameIdx]).trim() : '-';
@@ -660,10 +646,10 @@ export async function processWeeklySiteVisitFile(file: File, manualStartDate?: s
              }
           });
 
-          const pdfDataUrl = await generateWeeklyListPDF(site, rows, dateLabel, finalStartDateStr, finalEndDateStr);
-          const listFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_weekly_visit.pdf`;
-          images.push({ project_name: site, image_url: pdfDataUrl, filename: listFilename });
-          zip.file(listFilename, pdfDataUrl.split(',')[1], { base64: true });
+          const listDataUrl = await generateWeeklyListImage(site, rows, dateLabel, finalStartDateStr, finalEndDateStr);
+          const listFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_weekly_visit.png`;
+          images.push({ project_name: site, image_url: listDataUrl, filename: listFilename });
+          zip.file(listFilename, listDataUrl.split(',')[1], { base64: true });
 
           const summaryDataUrl = await generateWeeklySummaryImage(site, rows, summaryStats, sourceStats, dateLabel, finalStartDateStr, finalEndDateStr);
           const summaryFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_weekly_summary.png`;
