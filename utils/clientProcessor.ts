@@ -147,7 +147,7 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
     width: '850px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
-    fontFamily: 'sans-serif',
+    fontFamily: "'Inter', sans-serif",
     color: '#000000', 
     zIndex: '-9999',
     pointerEvents: 'none'
@@ -169,7 +169,7 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
       formattedHeader = "Total Call<br/>Duration";
     }
     const alignment = h === "User Name" ? 'left' : 'center';
-    return `<th style="padding: 6px 4px; text-align: ${alignment}; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; vertical-align: bottom; line-height: 1.1;">
+    return `<th style="padding: 6px 4px; text-align: ${alignment}; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; vertical-align: bottom; line-height: 1.1;">
       ${formattedHeader}
     </th>`;
   }).join('');
@@ -188,9 +188,9 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
   `).join('');
 
   container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
+    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box; font-family: 'Cinzel Decorative', cursive;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">CALLING REPORT</div>
+        <div style="font-size: 14px; font-weight: 900; color: #000000; text-transform: uppercase;">CALLING REPORT</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
         <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
@@ -224,7 +224,9 @@ export async function processFile(file: File): Promise<ProcessResponse> {
         const data = e.target?.result;
         // CellNF: true and CellFormula: true enable 'editing mode' values
         const workbook = read(data, { type: 'array', cellDates: true, cellNF: true, cellFormula: true });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const sheetName = workbook.SheetNames.find(n => n.toLowerCase() === 'call logs');
+        const sheet = sheetName ? workbook.Sheets[sheetName] : null;
+        if (!sheet) throw new Error("Sheet 'Call logs' not found in the Excel file.");
         const rawRows = utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
         
         if (!rawRows || rawRows.length === 0) throw new Error("Excel file is empty.");

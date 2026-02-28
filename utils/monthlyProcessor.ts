@@ -105,82 +105,102 @@ function determineSource(cpData: any, sourceData: any, subSourceData: any): stri
 // --- Image Generation: Main List ---
 
 async function generateMonthlyListImage(siteName: string, rows: any[], reportTitle: string, startDate: string, endDate: string): Promise<string> {
-  const container = document.createElement('div');
-  Object.assign(container.style, {
-    position: 'fixed',
-    top: '0',
-    left: '0',
-    width: '1250px', 
-    backgroundColor: '#ffffff', 
-    padding: '15px', 
-    fontFamily: 'sans-serif',
-    color: '#000000', 
-    zIndex: '-9999',
-    pointerEvents: 'none'
-  });
+  const doc = new jsPDF({ orientation: 'landscape' });
+
+  // Header
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("SITE VISIT", 148, 15, { align: "center" });
   
-  if (rows.length === 0) return '';
+  doc.setLineWidth(0.5);
+  doc.line(128, 17, 168, 17); // Underline
 
-  const headerHtml = `
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 40px;">Sr. No.</th>
-    <th style="padding: 6px 4px; text-align: left; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6;">Visitor Name</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 80px;">Team</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 100px;">Source</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 140px;">CP Firm Name</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">Visit Date</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">2nd Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">3rd Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">4th Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 85px;">5th Visit</th>
-    <th style="padding: 6px 4px; text-align: center; border: 1px solid #000000; font-size: 11px; font-weight: 700; color: #000000; background-color: #f3f4f6; width: 110px;">State</th>
-  `;
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text(siteName.toUpperCase(), 148, 25, { align: "center" });
 
-  const rowsHtml = rows.map((row, index) => `
-    <tr>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${index + 1}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: left; color: #000000; font-weight: 500;">${row.name}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.team}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.source}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.cpFirmName}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date2}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date3}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date4}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.date5}</td>
-      <td style="padding: 5px 6px; border: 1px solid #000000; font-size: 11px; text-align: center; color: #000000;">${row.state}</td>
-    </tr>
-  `).join('');
+  doc.setLineWidth(0.5);
+  doc.line(128, 27, 168, 27); // Underline
 
-  container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
-      <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 800; color: #000000; text-transform: uppercase;">SITE VISIT</div>
-        <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
-        <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 12px; font-weight: 700; color: #000000;">${reportTitle}</div>
-      </div>
-      
-      <div style="padding: 5px 2px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #000000;">
-        <span>Start Date: ${startDate}</span>
-        <span>End Date: ${endDate}</span>
-      </div>
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text(reportTitle, 148, 33, { align: "center" });
 
-      <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
-        <thead><tr>${headerHtml}</tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    </div>
-  `;
+  // Date Range
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Start Date: ${startDate}`, 14, 40);
+  doc.text(`End Date: ${endDate}`, 282, 40, { align: "right" });
 
-  document.body.appendChild(container);
-  await new Promise(resolve => setTimeout(resolve, 600));
+  // Table Data
+  const tableBody = rows.map((row, index) => [
+    index + 1,
+    row.name,
+    row.team,
+    row.source,
+    row.cpFirmName,
+    row.date,
+    row.date2,
+    row.date3,
+    row.date4,
+    row.date5,
+    row.state
+  ]);
 
-  try {
-    return await toPng(container, { quality: 0.95, pixelRatio: 2 });
-  } finally {
-    if (document.body.contains(container)) document.body.removeChild(container);
-  }
+  autoTable(doc, {
+    startY: 45,
+    head: [['Sr. No.', 'Visitor Name', 'Team', 'Source', 'CP Firm Name', 'Visit Date', '2nd Visit', '3rd Visit', '4th Visit', '5th Visit', 'State']],
+    body: tableBody,
+    theme: 'grid',
+    styles: { 
+      fontSize: 8, 
+      cellPadding: 2,
+      lineColor: [0, 0, 0],
+      lineWidth: 0.1,
+      textColor: [0, 0, 0]
+    },
+    headStyles: { 
+      fillColor: [243, 244, 246], 
+      textColor: [0, 0, 0], 
+      fontStyle: 'bold', 
+      lineWidth: 0.1, 
+      lineColor: [0, 0, 0],
+      halign: 'center'
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 15 }, // Sr No
+      1: { halign: 'left' }, // Name
+      2: { halign: 'center' }, // Team
+      3: { halign: 'center' }, // Source
+      4: { halign: 'center' }, // CP Firm
+      5: { halign: 'center' }, // Date
+      6: { halign: 'center' }, // Date 2
+      7: { halign: 'center' }, // Date 3
+      8: { halign: 'center' }, // Date 4
+      9: { halign: 'center' }, // Date 5
+      10: { halign: 'center' } // State
+    },
+    margin: { bottom: 40, top: 45 }, // Increased bottom margin
+    didDrawPage: (data) => {
+        // Header on subsequent pages
+        if (data.pageNumber > 1) {
+             doc.setFontSize(10);
+             doc.setFont("helvetica", "bold");
+             doc.text(`${siteName} - Site Visit Report`, 14, 25);
+             doc.setFontSize(8);
+             doc.setFont("helvetica", "normal");
+             doc.text(`Start: ${startDate} | End: ${endDate}`, 14, 35);
+        }
+
+        // Footer with page number
+        const pageSize = doc.internal.pageSize;
+        const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+        doc.setFontSize(8);
+        doc.text('Page ' + String(data.pageNumber), data.settings.margin.left, pageHeight - 15);
+    }
+  });
+
+  return doc.output('datauristring');
 }
 
 // --- Image Generation: Summary ---
@@ -647,21 +667,8 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
           });
 
           // Generate List as PDF
-          const listDataUrl = await generateMonthlyListImage(site, rows, dateLabel, finalStartDateStr, finalEndDateStr);
+          const pdfDataUrl = await generateMonthlyListImage(site, rows, dateLabel, finalStartDateStr, finalEndDateStr);
           
-          // Convert list image to PDF
-          const img = new Image();
-          img.src = listDataUrl;
-          await new Promise((r) => { img.onload = r; });
-          
-          const pdf = new jsPDF({
-            orientation: img.width > img.height ? 'l' : 'p',
-            unit: 'px',
-            format: [img.width, img.height]
-          });
-          pdf.addImage(listDataUrl, 'PNG', 0, 0, img.width, img.height);
-          const pdfDataUrl = pdf.output('datauristring');
-
           const listFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_site_visit.pdf`;
           images.push({ project_name: site, image_url: pdfDataUrl, filename: listFilename });
           zip.file(listFilename, pdfDataUrl.split(',')[1], { base64: true });
