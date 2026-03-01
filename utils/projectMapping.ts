@@ -26,6 +26,7 @@ export const USER_PROJECT_MAPPING: Record<string, string> = {
   "Sonali Shinde": "Kairos",
   "Sakshi Jamdar": "Kairos",
   "Sejal Satav": "Statement", 
+  "Rajshree Nimgire": "Kairos",
 };
 
 export const USER_TEAM_MAPPING: Record<string, string> = {
@@ -49,6 +50,7 @@ export const USER_TEAM_MAPPING: Record<string, string> = {
   "Sonali Shinde": "Sales",
   "Sakshi Jamdar": "GRE",
   "Sejal Satav": "Presales",
+  "Rajshree Nimgire": "Sales Manager",
 };
 
 // Default value if user is not found in the mapping

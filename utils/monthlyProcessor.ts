@@ -1,4 +1,4 @@
-import { read, utils } from 'xlsx';
+import { read, utils, write } from 'xlsx';
 import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
 import { jsPDF } from "jspdf";
@@ -470,6 +470,7 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
 
         if (headerIndex === -1) throw new Error("Could not find required columns (Name, Assigned To, etc).");
 
+        const headerRow = rawRows[headerIndex];
         const startFilter = manualStartDate ? parseDate(manualStartDate) : null;
         const endFilter = manualEndDate ? parseDate(manualEndDate) : null;
 
@@ -594,7 +595,8 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
             date4: d4 ? formatDate(d4) : '-',
             date5: d5 ? formatDate(d5) : '-',
             rawDateVal: selectedDate,
-            sortDate: d1 // Store 1st visit date for sorting
+            sortDate: d1, // Store 1st visit date for sorting
+            originalRow: row
           });
         }
 
@@ -672,6 +674,17 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
           const listFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_site_visit.pdf`;
           images.push({ project_name: site, image_url: pdfDataUrl, filename: listFilename });
           zip.file(listFilename, pdfDataUrl.split(',')[1], { base64: true });
+
+          // Generate Raw Excel
+          const excelRows = rows.map(r => r.originalRow);
+          const excelData = [headerRow, ...excelRows];
+          const ws = utils.aoa_to_sheet(excelData);
+          const wb = utils.book_new();
+          utils.book_append_sheet(wb, ws, "Site Visits");
+          const excelBuffer = write(wb, { bookType: 'xlsx', type: 'array' });
+          
+          const excelFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_raw.xlsx`;
+          zip.file(excelFilename, excelBuffer);
 
           // Summary remains PNG
           const summaryDataUrl = await generateMonthlySummaryImage(site, rows, summaryStats, sourceStats, dateLabel, finalStartDateStr, finalEndDateStr);
