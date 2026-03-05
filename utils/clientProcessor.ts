@@ -11,29 +11,7 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
  * If it matches known success keywords, it's Answered.
  * Otherwise, it's counted as Missed (ensuring total count is accurate).
  */
-function isAnswered(status: any): boolean {
-  if (status === null || status === undefined) return false;
-  const s = String(status).toLowerCase().trim();
-  
-  // Explicit "Answered" markers commonly found in calling software
-  const answeredKeywords = [
-    'connected', 'talked', 'answer', 'converted', 'sale', 
-    'interested', 'visit', 'meeting', 'demo', 'deal', 'follow',
-    'success', 'picked'
-  ];
-
-  const matchesAnswered = answeredKeywords.some(kw => s.includes(kw));
-  
-  // Ensure we don't treat negative outcomes like "not answered" as Answered
-  if (matchesAnswered) {
-    const isFalsePositive = s.includes('not ') || s.includes('no ');
-    // If it says "connected" but also "not", we check if "connected" is the primary intent
-    if (isFalsePositive && !s.includes('connected')) return false;
-    return true;
-  }
-
-  return false;
-}
+// Function isAnswered removed to support strict "Answered" vs "Missed" counting logic.
 
 /**
  * Handles durations from Excel "Editing Mode" (raw values).
@@ -147,7 +125,7 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
     width: '850px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
-    fontFamily: "'Inter', sans-serif",
+    fontFamily: "'Calibri', sans-serif",
     color: '#000000', 
     zIndex: '-9999',
     pointerEvents: 'none'
@@ -169,7 +147,7 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
       formattedHeader = "Total Call<br/>Duration";
     }
     const alignment = h === "User Name" ? 'left' : 'center';
-    return `<th style="padding: 6px 4px; text-align: ${alignment}; border: 1px solid #000000; font-size: 11px; font-weight: 900; color: #000000; background-color: #f3f4f6; vertical-align: bottom; line-height: 1.1;">
+    return `<th style="padding: 6px 4px; text-align: ${alignment}; border: 1px solid #000000; font-size: 11px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6; vertical-align: bottom; line-height: 1.1;">
       ${formattedHeader}
     </th>`;
   }).join('');
@@ -188,13 +166,13 @@ async function generateTableImage(siteName: string, rows: any[], displayDate: st
   `).join('');
 
   container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box; font-family: 'Cinzel Decorative', cursive;">
+    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box; font-family: 'Calibri', sans-serif;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 900; color: #000000; text-transform: uppercase;">CALLING REPORT</div>
+        <div style="font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">CALLING REPORT</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 18px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
+        <div style="font-size: 18px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 150px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 12px; font-weight: 700; color: #000000;">${displayDate}</div>
+        <div style="font-size: 12px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000;">${displayDate}</div>
       </div>
       <div style="height: 10px;"></div>
       <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
@@ -340,10 +318,12 @@ export async function processFile(file: File): Promise<ProcessResponse> {
 
           const stats = sites[siteName][matchedUserKey];
           
-          if (isAnswered(disposition)) {
+          const disp = String(disposition).trim().toLowerCase();
+          
+          if (disp === 'answered') {
             stats.answered++;
             stats.durAns += durationRaw;
-          } else {
+          } else if (disp === 'missed') {
             stats.missed++;
             stats.durMiss += durationRaw;
           }

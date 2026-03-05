@@ -110,7 +110,7 @@ interface TeamCounts {
   salesGre: number;
 }
 
-async function generateMonthlyLeadSummaryImage(
+  async function generateMonthlyLeadSummaryImage(
   siteName: string, 
   rows: any[], 
   summaryStats: Record<string, TeamCounts>, 
@@ -127,7 +127,7 @@ async function generateMonthlyLeadSummaryImage(
     width: '450px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
-    fontFamily: "'Inter', sans-serif",
+    fontFamily: "'Calibri', sans-serif",
     color: '#000000', 
     zIndex: '-9999',
     pointerEvents: 'none'
@@ -170,16 +170,16 @@ async function generateMonthlyLeadSummaryImage(
   }).join('');
 
   container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box; font-family: 'Cinzel Decorative', cursive;">
+    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box; font-family: 'Calibri', sans-serif;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 900; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
+        <div style="font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 16px; font-weight: 900; color: #000000; text-transform: uppercase;">${siteName}</div>
+        <div style="font-size: 16px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 12px; font-weight: 700; color: #000000;">${reportTitle}</div>
+        <div style="font-size: 12px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000;">${reportTitle}</div>
       </div>
 
-      <div style="padding: 5px 2px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #000000; padding-left: 15px; padding-right: 15px;">
+      <div style="padding: 5px 2px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; padding-left: 15px; padding-right: 15px;">
         <span>Start Date: ${startDate}</span>
         <span>End Date: ${endDate}</span>
       </div>
@@ -191,19 +191,19 @@ async function generateMonthlyLeadSummaryImage(
         <!-- Lead Status Summary Removed for this report -->
 
         <!-- Source Summary -->
-        <div style="font-size: 12px; font-weight: 900; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
+        <div style="font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
         <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
           <thead>
             <tr>
-              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Source</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Leads</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; color: #000000; background-color: #f3f4f6;">Site Visits</th>
+              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Source</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Leads</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Site Visits</th>
             </tr>
           </thead>
           <tbody>
             ${sourceRowsHtml}
             <tr>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; color: #000000; background-color: #f9fafb;">Total</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; background-color: #f9fafb;">Total</td>
                <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSourcePresales}</td>
                <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSourceSalesGre}</td>
             </tr>
@@ -322,6 +322,7 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
         });
 
         const sites: Record<string, any[]> = {};
+        const seenRecords = new Set<string>();
         
         for (let i = headerIndex + 1; i < rawRows.length; i++) {
           const row = rawRows[i];
@@ -411,6 +412,11 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
 
           const source = determineSource(cpData, leadSourceData, subSourceData);
           const cpFirmName = cpData ? String(cpData).trim() : '-';
+
+          // Deduplication Check
+          const uniqueKey = `${siteName}|${name}|${d1 ? d1.getTime() : 'no_date'}`;
+          if (seenRecords.has(uniqueKey)) continue;
+          seenRecords.add(uniqueKey);
 
           if (!sites[siteName]) sites[siteName] = [];
           
