@@ -49,7 +49,7 @@ export const USER_TEAM_MAPPING: Record<string, string> = {
   "Shubham Pardesi": "Sales",
   "Sonali Shinde": "Sales",
   "Sakshi Jamdar": "GRE",
-  "Sejal Satav": "Presales",
+  "Sejal Satav": "Sales",
   "Rajshree Nimgire": "Sales Manager",
 };
 
