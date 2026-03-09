@@ -257,10 +257,10 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
         const assignedAliases = ['assigned to', 'assigned_to', 'owner', 'agent', 'executive', 'sales executive', 'allocated to', 'sales person', 'sourcing manager', 'closing manager'];
         
         const dateAliases = ['visit date', 'visit_date', 'date of visit', 'date', 'visited date', 'created time', 'created on', 'entry date'];
-        const date2Aliases = ['2nd visit date', 'second visit date', 'visit date 2', '2nd_visit_date'];
-        const date3Aliases = ['3rd visit date', 'third visit date', 'visit date 3', '3rd_visit_date'];
-        const date4Aliases = ['4th site visit date', '4th site visit date (az)', '4th visit date', 'fourth visit date', 'visit date 4', '4th_visit_date', '4th site visit', '4th visit', 'visit 4'];
-        const date5Aliases = ['5th site visit date', '5th visit date', 'fifth visit date', 'visit date 5', '5th_visit_date', '5th site visit', '5th visit', 'visit 5'];
+        const date2Aliases = ['revisit date 1', 'revisit_date_1', 're-visit date 1', '2nd visit date', 'second visit date', 'visit date 2', '2nd_visit_date'];
+        const date3Aliases = ['revisit date 2', 'revisit_date_2', 're-visit date 2', '3rd visit date', 'third visit date', 'visit date 3', '3rd_visit_date'];
+        const date4Aliases = ['revisit date 3', 'revisit_date_3', 're-visit date 3', '4th site visit date', '4th site visit date (az)', '4th visit date', 'fourth visit date', 'visit date 4', '4th_visit_date', '4th site visit', '4th visit', 'visit 4'];
+        const date5Aliases = ['revisit date 4', 'revisit_date_4', 're-visit date 4', '5th site visit date', '5th visit date', 'fifth visit date', 'visit date 5', '5th_visit_date', '5th site visit', '5th visit', 'visit 5'];
         
         const cpFirmAliases = ['cp firm name', 'cp firm name (v)', 'cp name', 'channel partner firm name'];
         const leadSourceAliases = ['lead source', 'lead source (f)', 'source', 'source of lead', 'enquiry source'];
@@ -354,12 +354,17 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
           }
 
           // 2. If still default, check Project Column
+          const rawProject = projectIdx !== -1 ? String(row[projectIdx]).toLowerCase().trim() : '';
           if (siteName === DEFAULT_SITE) {
-            const rawProject = projectIdx !== -1 ? String(row[projectIdx]).toLowerCase().trim() : '';
             if (rawProject.includes('kairos')) siteName = 'Kairos';
             else if (rawProject.includes('aqua') || rawProject.includes('aqualife')) siteName = 'Aqua Life';
             else if (rawProject.includes('milestone')) siteName = 'Milestone';
             else if (rawProject.includes('statement')) siteName = 'Statement';
+          }
+
+          // 3. Override for Legacy Ekam
+          if (rawProject.includes('ekam')) {
+              siteName = 'Legacy Ekam';
           }
 
           // Always try to find team using assignedLower
