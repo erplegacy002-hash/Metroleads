@@ -27,6 +27,7 @@ export const USER_PROJECT_MAPPING: Record<string, string> = {
   "Sakshi Jamdar": "Kairos",
   "Sejal Satav": "Statement", 
   "Rajshree Nimgire": "Kairos",
+  "Vivek Patil": "Kairos",
 };
 
 export const USER_TEAM_MAPPING: Record<string, string> = {
