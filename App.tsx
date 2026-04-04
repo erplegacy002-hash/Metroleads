@@ -20,6 +20,8 @@ const App: React.FC = () => {
   // Date states
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedSource, setSelectedSource] = useState('All');
+  const sourceOptions = ['All', 'Digital', 'Channel Partner', 'Referral', 'Offer', 'Walk-In', 'Hoarding', 'Revisit'];
 
   const handleProcess = async () => {
     if (!file) return;
@@ -32,13 +34,13 @@ const App: React.FC = () => {
       let data: ProcessResponse;
       
       if (activeTab === 'Monthly Site Visit Report') {
-        data = await processMonthlyFile(file, startDate, endDate);
+        data = await processMonthlyFile(file, startDate, endDate, selectedSource);
       } else if (activeTab === 'Monthly (Lead + Site Visit) Report') {
-        data = await processMonthlyLeadSiteVisitFile(file, startDate, endDate);
+        data = await processMonthlyLeadSiteVisitFile(file, startDate, endDate, selectedSource);
       } else if (activeTab === 'Weekly Site Visit Report') {
-        data = await processWeeklySiteVisitFile(file, startDate, endDate);
+        data = await processWeeklySiteVisitFile(file, startDate, endDate, selectedSource);
       } else if (activeTab === 'Daily Site Visit Report') {
-        data = await processDailySiteVisitFile(file, startDate, endDate);
+        data = await processDailySiteVisitFile(file, startDate, endDate, selectedSource);
       } else if (activeTab === 'Presales Leads Report') {
         data = await processPresalesLeadsFile(file);
       } else {
@@ -60,6 +62,7 @@ const App: React.FC = () => {
     setFile(null);
     setResult(null);
     setError(null);
+    setSelectedSource('All');
 
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
@@ -194,7 +197,7 @@ const App: React.FC = () => {
 
             {/* Date Inputs for Site Visit Reports */}
             {showDateInputs && (
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 max-w-2xl mx-auto">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 max-w-4xl mx-auto">
                 <div className="w-full">
                   <label className="block text-sm font-semibold text-slate-700 mb-1 font-inter">Start Date</label>
                   <div className="relative">
@@ -222,6 +225,18 @@ const App: React.FC = () => {
                       className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg focus:ring-[#d4af37] focus:border-[#d4af37] text-sm font-sans"
                     />
                   </div>
+                </div>
+                <div className="w-full">
+                  <label className="block text-sm font-semibold text-slate-700 mb-1 font-inter">Source</label>
+                  <select
+                    value={selectedSource}
+                    onChange={(e) => setSelectedSource(e.target.value)}
+                    className="block w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-[#d4af37] focus:border-[#d4af37] text-sm font-sans bg-white"
+                  >
+                    {sourceOptions.map(src => (
+                      <option key={src} value={src}>{src}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             )}

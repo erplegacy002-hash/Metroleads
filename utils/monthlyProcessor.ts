@@ -396,7 +396,7 @@ function findColumnIndex(row: any[], aliases: string[]): number {
   return -1;
 }
 
-export async function processMonthlyFile(file: File, manualStartDate?: string, manualEndDate?: string): Promise<ProcessResponse> {
+export async function processMonthlyFile(file: File, manualStartDate?: string, manualEndDate?: string, sourceFilter: string = 'All'): Promise<ProcessResponse> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -625,8 +625,26 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
         let dateLabel = "MONTHLY REPORT";
 
         for (const site of siteKeys) {
-          const rows = sites[site];
+          let rows = sites[site];
           
+          if (sourceFilter !== 'All') {
+              rows = rows.filter(r => {
+                 let isRevisit = false;
+                 if (r.date5 && r.date5 !== '-') isRevisit = true;
+                 else if (r.date4 && r.date4 !== '-') isRevisit = true;
+                 else if (r.date3 && r.date3 !== '-') isRevisit = true;
+                 else if (r.date2 && r.date2 !== '-') isRevisit = true;
+
+                 if (sourceFilter === 'Revisit') {
+                     return isRevisit;
+                 } else {
+                     return r.source.toLowerCase() === sourceFilter.toLowerCase();
+                 }
+              });
+          }
+          
+          if (rows.length === 0) continue;
+
           // Calculate Date Range for Header (Sort rawDateVal to get min/max independent of row order)
           const validRawDates = rows.map(r => r.rawDateVal).filter(d => d) as Date[];
           validRawDates.sort((a, b) => a.getTime() - b.getTime());
@@ -705,6 +723,8 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
           images.push({ project_name: `Summary - ${site}`, image_url: summaryDataUrl, filename: summaryFilename });
           zip.file(summaryFilename, summaryDataUrl.split(',')[1], { base64: true });
         }
+
+        if (images.length === 0) throw new Error("No matching records found for the selected criteria.");
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
         resolve({ images, zip_url: URL.createObjectURL(zipBlob), message: "Success" });
