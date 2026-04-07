@@ -35,6 +35,8 @@ const App: React.FC = () => {
       
       if (activeTab === 'Monthly Site Visit Report') {
         data = await processMonthlyFile(file, startDate, endDate, selectedSource);
+      } else if (activeTab === 'User Wise Site Visit Report') {
+        data = await processMonthlyFile(file, startDate, endDate, selectedSource, true);
       } else if (activeTab === 'Monthly (Lead + Site Visit) Report') {
         data = await processMonthlyLeadSiteVisitFile(file, startDate, endDate, selectedSource);
       } else if (activeTab === 'Weekly Site Visit Report') {
@@ -101,6 +103,7 @@ const App: React.FC = () => {
     { id: 'Daily Site Visit Report', label: 'Daily Site Visit Report', icon: MapPin },
     { id: 'Weekly Site Visit Report', label: 'Weekly Site Visit Report', icon: CalendarDays },
     { id: 'Monthly Site Visit Report', label: 'Monthly Site Visit Report', icon: CalendarRange },
+    { id: 'User Wise Site Visit Report', label: 'User Wise Site Visit Report', icon: Users },
     { id: 'Monthly (Lead + Site Visit) Report', label: 'Monthly (Lead + Site Visit) Report', icon: FileText },
     { id: 'Presales Leads Report', label: 'Presales Leads Report', icon: Users },
   ];

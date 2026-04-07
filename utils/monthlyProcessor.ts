@@ -6,6 +6,12 @@ import autoTable from "jspdf-autotable";
 import { GeneratedImage, ProcessResponse } from '../types';
 import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './projectMapping';
 
+export interface UserStatsData {
+  total: number;
+  states: Record<string, number>;
+  sources: Record<string, number>;
+}
+
 // --- Helpers ---
 
 function parseDate(val: any): Date | null {
@@ -216,16 +222,18 @@ async function generateMonthlySummaryImage(
   rows: any[], 
   summaryStats: Record<string, TeamCounts>, 
   sourceStats: Record<string, TeamCounts>, 
+  userStats: Record<string, UserStatsData> | null,
   reportTitle: string, 
   startDate: string, 
   endDate: string
 ): Promise<string> {
   const container = document.createElement('div');
+  const containerWidth = userStats ? '800px' : '450px';
   Object.assign(container.style, {
     position: 'fixed',
     top: '0',
     left: '0',
-    width: '450px', 
+    width: containerWidth, 
     backgroundColor: '#ffffff', 
     padding: '15px', 
     fontFamily: "'Calibri', sans-serif",
@@ -241,7 +249,7 @@ async function generateMonthlySummaryImage(
   const countDate4 = rows.filter(r => r.date4 && r.date4 !== '-').length;
   const countDate5 = rows.filter(r => r.date5 && r.date5 !== '-').length;
   const totalRevisits = countDate2 + countDate3 + countDate4 + countDate5; // Sum of 2nd, 3rd, 4th, 5th visits
-  const totalVisits = totalRows + totalRevisits; // Total Footfall
+  const totalVisits = totalRows; // Total Footfall should match the number of records shown in the report
   const totalBookings = (summaryStats['Booked']?.presales || 0) + (summaryStats['Booked']?.salesGre || 0);
 
   // Table Footer Calculation
@@ -300,6 +308,65 @@ async function generateMonthlySummaryImage(
       <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.salesGre}</td>
     </tr>`;
   }).join('');
+
+  let userStatesHtml = '';
+  let userSourcesHtml = '';
+  let totalUserVisits = 0;
+  
+  if (userStats) {
+    const userKeys = Object.keys(userStats).sort((a, b) => userStats[b].total - userStats[a].total);
+    
+    // User Wise Lead Status
+    userStatesHtml = `
+    <div style="font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase; margin-top: 20px; margin-bottom: 6px;">USER WISE LEAD STATUS</div>
+    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
+      <thead>
+        <tr>
+          <th style="padding: 6px; text-align: left; border: 1px solid #000000; font-size: 10px; font-weight: 900; background-color: #f3f4f6;">User</th>
+          ${allStateKeys.map(state => `<th style="padding: 6px; text-align: center; border: 1px solid #000000; font-size: 10px; font-weight: 900; background-color: #f3f4f6;">${state}</th>`).join('')}
+          <th style="padding: 6px; text-align: center; border: 1px solid #000000; font-size: 10px; font-weight: 900; background-color: #f3f4f6;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${userKeys.map(user => {
+            const uStats = userStats[user];
+            totalUserVisits += uStats.total;
+            return `
+            <tr>
+              <td style="padding: 6px; border: 1px solid #000000; font-size: 10px; text-align: left;">${user}</td>
+              ${allStateKeys.map(state => `<td style="padding: 6px; border: 1px solid #000000; font-size: 10px; text-align: center;">${uStats.states[state] || 0}</td>`).join('')}
+              <td style="padding: 6px; border: 1px solid #000000; font-size: 10px; text-align: center; font-weight: bold;">${uStats.total}</td>
+            </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    `;
+
+    // User Wise Source
+    userSourcesHtml = `
+    <div style="font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase; margin-top: 20px; margin-bottom: 6px;">USER WISE SOURCE</div>
+    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
+      <thead>
+        <tr>
+          <th style="padding: 6px; text-align: left; border: 1px solid #000000; font-size: 10px; font-weight: 900; background-color: #f3f4f6;">User</th>
+          ${finalSourceOrder.map(source => `<th style="padding: 6px; text-align: center; border: 1px solid #000000; font-size: 10px; font-weight: 900; background-color: #f3f4f6;">${source}</th>`).join('')}
+          <th style="padding: 6px; text-align: center; border: 1px solid #000000; font-size: 10px; font-weight: 900; background-color: #f3f4f6;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${userKeys.map(user => {
+            const uStats = userStats[user];
+            return `
+            <tr>
+              <td style="padding: 6px; border: 1px solid #000000; font-size: 10px; text-align: left;">${user}</td>
+              ${finalSourceOrder.map(source => `<td style="padding: 6px; border: 1px solid #000000; font-size: 10px; text-align: center;">${uStats.sources[source] || 0}</td>`).join('')}
+              <td style="padding: 6px; border: 1px solid #000000; font-size: 10px; text-align: center; font-weight: bold;">${uStats.total}</td>
+            </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    `;
+  }
 
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
@@ -372,6 +439,11 @@ async function generateMonthlySummaryImage(
             </tr>
           </tbody>
         </table>
+        
+        ${userStats ? `
+        ${userStatesHtml}
+        ${userSourcesHtml}
+        ` : ''}
       </div>
     </div>
   `;
@@ -396,7 +468,7 @@ function findColumnIndex(row: any[], aliases: string[]): number {
   return -1;
 }
 
-export async function processMonthlyFile(file: File, manualStartDate?: string, manualEndDate?: string, sourceFilter: string = 'All'): Promise<ProcessResponse> {
+export async function processMonthlyFile(file: File, manualStartDate?: string, manualEndDate?: string, sourceFilter: string = 'All', isUserWise: boolean = false): Promise<ProcessResponse> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -622,7 +694,7 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
         const manualStartFormatted = startFilter ? formatDate(startFilter) : null;
         const manualEndFormatted = endFilter ? formatDate(endFilter) : null;
 
-        let dateLabel = "MONTHLY REPORT";
+        let dateLabel = isUserWise ? "USER WISE REPORT" : "MONTHLY REPORT";
 
         for (const site of siteKeys) {
           let rows = sites[site];
@@ -669,6 +741,7 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
 
           const summaryStats: Record<string, TeamCounts> = {};
           const sourceStats: Record<string, TeamCounts> = {};
+          const userStats: Record<string, UserStatsData> | null = isUserWise ? {} : null;
 
           const incrementStats = (stats: Record<string, TeamCounts>, key: string, isPresales: boolean) => {
             if (!stats[key]) stats[key] = { presales: 0, salesGre: 0 };
@@ -680,6 +753,8 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
           };
           
           rows.forEach(r => {
+             // For Booked state, use the actual team assigned to the user instead of defaulting to Presales if not found
+             // The team is already determined in the row object during parsing based on USER_TEAM_MAPPING
              const isPresales = r.team === 'Presales';
              incrementStats(summaryStats, r.state, isPresales);
              incrementStats(sourceStats, r.source, isPresales);
@@ -696,6 +771,34 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
              }
              if (isRevisit) {
                  incrementStats(sourceStats, 'Revisit', isPresales);
+             }
+             
+             if (userStats) {
+                 const assignedTo = r.originalRow[assignedToIdx] ? String(r.originalRow[assignedToIdx]).trim() : 'Unassigned';
+                 if (!userStats[assignedTo]) {
+                     userStats[assignedTo] = { total: 0, states: {}, sources: {} };
+                 }
+                 
+                 userStats[assignedTo].total++;
+                 
+                 if (!userStats[assignedTo].states[r.state]) userStats[assignedTo].states[r.state] = 0;
+                 userStats[assignedTo].states[r.state]++;
+                 
+                 if (!userStats[assignedTo].sources[r.source]) userStats[assignedTo].sources[r.source] = 0;
+                 userStats[assignedTo].sources[r.source]++;
+                 
+                 if (isRevisit) {
+                     let revisitCount = 0;
+                     if (r.date2 && r.date2 !== '-') revisitCount++;
+                     if (r.date3 && r.date3 !== '-') revisitCount++;
+                     if (r.date4 && r.date4 !== '-') revisitCount++;
+                     if (r.date5 && r.date5 !== '-') revisitCount++;
+                     
+                     userStats[assignedTo].total += revisitCount;
+                     
+                     if (!userStats[assignedTo].sources['Revisit']) userStats[assignedTo].sources['Revisit'] = 0;
+                     userStats[assignedTo].sources['Revisit'] += revisitCount;
+                 }
              }
           });
 
@@ -718,8 +821,8 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
           zip.file(excelFilename, excelBuffer);
 
           // Summary remains PNG
-          const summaryDataUrl = await generateMonthlySummaryImage(site, rows, summaryStats, sourceStats, dateLabel, finalStartDateStr, finalEndDateStr);
-          const summaryFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_monthly_summary.png`;
+          const summaryDataUrl = await generateMonthlySummaryImage(site, rows, summaryStats, sourceStats, userStats, dateLabel, finalStartDateStr, finalEndDateStr);
+          const summaryFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${isUserWise ? 'user_wise' : 'monthly'}_summary.png`;
           images.push({ project_name: `Summary - ${site}`, image_url: summaryDataUrl, filename: summaryFilename });
           zip.file(summaryFilename, summaryDataUrl.split(',')[1], { base64: true });
         }
