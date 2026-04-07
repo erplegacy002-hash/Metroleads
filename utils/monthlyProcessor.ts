@@ -228,12 +228,14 @@ async function generateMonthlySummaryImage(
   endDate: string
 ): Promise<string> {
   const container = document.createElement('div');
-  const containerWidth = userStats ? '800px' : '450px';
+  const containerWidth = userStats ? 'max-content' : '450px';
   Object.assign(container.style, {
     position: 'fixed',
     top: '0',
     left: '0',
     width: containerWidth, 
+    minWidth: userStats ? '800px' : 'auto',
+    maxWidth: 'none',
     backgroundColor: '#ffffff', 
     padding: '15px', 
     fontFamily: "'Calibri', sans-serif",
