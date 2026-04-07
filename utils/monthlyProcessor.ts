@@ -724,6 +724,7 @@ export async function processMonthlyFile(files: File | File[], manualStartDate?:
             team,
             source,
             cpFirmName,
+            assignedTo: assignedStr,
             date: d1 ? formatDate(d1) : '-',
             date2: d2 ? formatDate(d2) : '-',
             date3: d3 ? formatDate(d3) : '-',
@@ -829,7 +830,7 @@ export async function processMonthlyFile(files: File | File[], manualStartDate?:
              }
              
              if (userStats) {
-                 const assignedTo = r.originalRow[assignedToIdx] ? String(r.originalRow[assignedToIdx]).trim() : 'Unassigned';
+                 const assignedTo = r.assignedTo || 'Unassigned';
                  if (!userStats[assignedTo]) {
                      userStats[assignedTo] = { total: 0, states: {}, sources: {} };
                  }
