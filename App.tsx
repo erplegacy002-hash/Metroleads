@@ -13,6 +13,7 @@ import { processPresalesLeadsFile } from './utils/presalesLeadsProcessor';
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Daily Report Processor');
   const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ProcessResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +25,12 @@ const App: React.FC = () => {
   const sourceOptions = ['All', 'Digital', 'Channel Partner', 'Referral', 'Offer', 'Walk-In', 'Hoarding', 'Revisit'];
 
   const handleProcess = async () => {
-    if (!file) return;
+    const isUserWise = activeTab === 'User Wise Site Visit Report';
+    if (isUserWise) {
+      if (files.length === 0) return;
+    } else {
+      if (!file) return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -34,20 +40,20 @@ const App: React.FC = () => {
       let data: ProcessResponse;
       
       if (activeTab === 'Monthly Site Visit Report') {
-        data = await processMonthlyFile(file, startDate, endDate, selectedSource);
+        data = await processMonthlyFile(file!, startDate, endDate, selectedSource);
       } else if (activeTab === 'User Wise Site Visit Report') {
-        data = await processMonthlyFile(file, startDate, endDate, selectedSource, true);
+        data = await processMonthlyFile(files, startDate, endDate, selectedSource, true);
       } else if (activeTab === 'Monthly (Lead + Site Visit) Report') {
-        data = await processMonthlyLeadSiteVisitFile(file, startDate, endDate, selectedSource);
+        data = await processMonthlyLeadSiteVisitFile(file!, startDate, endDate, selectedSource);
       } else if (activeTab === 'Weekly Site Visit Report') {
-        data = await processWeeklySiteVisitFile(file, startDate, endDate, selectedSource);
+        data = await processWeeklySiteVisitFile(file!, startDate, endDate, selectedSource);
       } else if (activeTab === 'Daily Site Visit Report') {
-        data = await processDailySiteVisitFile(file, startDate, endDate, selectedSource);
+        data = await processDailySiteVisitFile(file!, startDate, endDate, selectedSource);
       } else if (activeTab === 'Presales Leads Report') {
-        data = await processPresalesLeadsFile(file);
+        data = await processPresalesLeadsFile(file!);
       } else {
         // Default to Daily Report Processor
-        data = await processFile(file);
+        data = await processFile(file!);
       }
       
       setResult(data);
@@ -248,6 +254,9 @@ const App: React.FC = () => {
             <FileUpload 
               onFileSelect={setFile} 
               selectedFile={file} 
+              onFilesSelect={setFiles}
+              selectedFiles={files}
+              multiple={activeTab === 'User Wise Site Visit Report'}
               disabled={isLoading} 
             />
 
@@ -262,10 +271,10 @@ const App: React.FC = () => {
 
               <button
                 onClick={handleProcess}
-                disabled={!file || isLoading}
+                disabled={(activeTab === 'User Wise Site Visit Report' ? files.length === 0 : !file) || isLoading}
                 className={`
                   flex items-center space-x-3 px-10 py-4 rounded-none font-bold text-lg tracking-wider shadow-md transition-all border
-                  ${!file || isLoading 
+                  ${((activeTab === 'User Wise Site Visit Report' ? files.length === 0 : !file) || isLoading)
                     ? 'bg-slate-300 text-slate-500 border-slate-300 cursor-not-allowed' 
                     : 'bg-[#1a1a1a] text-[#d4af37] border-[#d4af37] hover:bg-black hover:shadow-xl hover:scale-105'}
                 `}

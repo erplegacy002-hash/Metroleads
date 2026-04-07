@@ -504,17 +504,41 @@ function findColumnIndex(row: any[], aliases: string[]): number {
   return -1;
 }
 
-export async function processMonthlyFile(file: File, manualStartDate?: string, manualEndDate?: string, sourceFilter: string = 'All', isUserWise: boolean = false): Promise<ProcessResponse> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const data = e.target?.result;
+export async function processMonthlyFile(files: File | File[], manualStartDate?: string, manualEndDate?: string, sourceFilter: string = 'All', isUserWise: boolean = false): Promise<ProcessResponse> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const fileArray = Array.isArray(files) ? files : [files];
+      if (fileArray.length === 0) throw new Error("No files provided.");
+
+      const startFilter = manualStartDate ? parseDate(manualStartDate) : null;
+      const endFilter = manualEndDate ? parseDate(manualEndDate) : null;
+
+      const normalizedMapping: Record<string, string> = {};
+      Object.keys(USER_PROJECT_MAPPING).forEach(k => {
+        normalizedMapping[k.toLowerCase().trim()] = USER_PROJECT_MAPPING[k];
+      });
+
+      const normalizedTeamMapping: Record<string, string> = {};
+      Object.keys(USER_TEAM_MAPPING).forEach(k => {
+        normalizedTeamMapping[k.toLowerCase().trim()] = USER_TEAM_MAPPING[k];
+      });
+
+      const sites: Record<string, any[]> = {};
+      const seenRecords = new Set<string>();
+      let globalHeaderRow: any[] | null = null;
+
+      for (const file of fileArray) {
+        const data = await new Promise<ArrayBuffer>((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = (e) => res(e.target?.result as ArrayBuffer);
+          reader.onerror = rej;
+          reader.readAsArrayBuffer(file);
+        });
         const workbook = read(data, { type: 'array', cellDates: true });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rawRows = utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
 
-        if (!rawRows || rawRows.length === 0) throw new Error("Excel file is empty.");
+        if (!rawRows || rawRows.length === 0) continue;
 
         // Detect Columns
         let headerIndex = -1;
@@ -577,25 +601,15 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
           }
         }
 
-        if (headerIndex === -1) throw new Error("Could not find required columns (Name, Assigned To, etc).");
+        if (headerIndex === -1) {
+          console.warn(`Could not find required columns in file ${file.name}. Skipping.`);
+          continue;
+        }
 
-        const headerRow = rawRows[headerIndex];
-        const startFilter = manualStartDate ? parseDate(manualStartDate) : null;
-        const endFilter = manualEndDate ? parseDate(manualEndDate) : null;
+        if (!globalHeaderRow) {
+          globalHeaderRow = rawRows[headerIndex];
+        }
 
-        const normalizedMapping: Record<string, string> = {};
-        Object.keys(USER_PROJECT_MAPPING).forEach(k => {
-          normalizedMapping[k.toLowerCase().trim()] = USER_PROJECT_MAPPING[k];
-        });
-
-        const normalizedTeamMapping: Record<string, string> = {};
-        Object.keys(USER_TEAM_MAPPING).forEach(k => {
-          normalizedTeamMapping[k.toLowerCase().trim()] = USER_TEAM_MAPPING[k];
-        });
-
-        const sites: Record<string, any[]> = {};
-        const seenRecords = new Set<string>();
-        
         for (let i = headerIndex + 1; i < rawRows.length; i++) {
           const row = rawRows[i];
           if (!row || row.length === 0) continue;
@@ -720,8 +734,13 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
             originalRow: row
           });
         }
+      } // End of file loop
 
-        const images: GeneratedImage[] = [];
+      if (!globalHeaderRow) {
+        throw new Error("Could not find required columns in any of the provided files.");
+      }
+
+      const images: GeneratedImage[] = [];
         const zip = new JSZip();
         const siteKeys = Object.keys(sites);
 
@@ -847,7 +866,7 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
 
           // Generate Raw Excel
           const excelRows = rows.map(r => r.originalRow);
-          const excelData = [headerRow, ...excelRows];
+          const excelData = [globalHeaderRow, ...excelRows];
           const ws = utils.aoa_to_sheet(excelData);
           const wb = utils.book_new();
           utils.book_append_sheet(wb, ws, "Site Visits");
@@ -871,7 +890,5 @@ export async function processMonthlyFile(file: File, manualStartDate?: string, m
       } catch (err: any) {
         reject(err);
       }
-    };
-    reader.readAsArrayBuffer(file);
   });
 }
