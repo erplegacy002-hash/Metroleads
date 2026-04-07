@@ -10,7 +10,7 @@ export const USER_PROJECT_MAPPING: Record<string, string> = {
   "Pranav Satpute": "Milestone",
   "Khushi Tamang": "Statement",
   "Rakshanda Gupta": "Aqua Life",
-  "Mohit Manani": "Milestone",
+  "Mohit Manani": "Aqua Life",
   "Manisha Singh": "Kairos",
   "Jai Mulik": "Milestone",
   "Tanishq Singhai": "Milestone",

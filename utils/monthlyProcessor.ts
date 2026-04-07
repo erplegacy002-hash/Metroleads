@@ -286,9 +286,9 @@ async function generateMonthlySummaryImage(
     if (counts.presales === 0 && counts.salesGre === 0) return '';
     return `
     <tr>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: left; color: #000000;">${state}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.presales}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.salesGre}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: left; color: #000000;">${state}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: center; font-weight: 700; color: #000000;">${counts.presales}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: center; font-weight: 700; color: #000000;">${counts.salesGre}</td>
     </tr>`;
   }).join('');
 
@@ -303,54 +303,83 @@ async function generateMonthlySummaryImage(
     if (counts.presales === 0 && counts.salesGre === 0) return '';
     return `
     <tr>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: left; color: #000000;">${source}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.presales}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.salesGre}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: left; color: #000000;">${source}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: center; font-weight: 700; color: #000000;">${counts.presales}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: center; font-weight: 700; color: #000000;">${counts.salesGre}</td>
     </tr>`;
   }).join('');
 
   let userStatesHtml = '';
   let userSourcesHtml = '';
-  let totalUserVisits = 0;
   
   if (userStats) {
     const userKeys = Object.keys(userStats).sort((a, b) => userStats[b].total - userStats[a].total);
     
+    // Calculate totals for User Wise Lead Status
+    const stateTotals: Record<string, number> = {};
+    allStateKeys.forEach(state => stateTotals[state] = 0);
+    let grandTotalStates = 0;
+
+    userKeys.forEach(user => {
+      const uStats = userStats[user];
+      grandTotalStates += uStats.total;
+      allStateKeys.forEach(state => {
+        stateTotals[state] += (uStats.states[state] || 0);
+      });
+    });
+
+    // Calculate totals for User Wise Source
+    const sourceTotals: Record<string, number> = {};
+    finalSourceOrder.forEach(source => sourceTotals[source] = 0);
+    let grandTotalSources = 0;
+
+    userKeys.forEach(user => {
+      const uStats = userStats[user];
+      grandTotalSources += uStats.total;
+      finalSourceOrder.forEach(source => {
+        sourceTotals[source] += (uStats.sources[source] || 0);
+      });
+    });
+    
     // User Wise Lead Status
     userStatesHtml = `
-    <div style="font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase; margin-top: 20px; margin-bottom: 6px;">USER WISE LEAD STATUS</div>
+    <div style="font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase; margin-top: 20px; margin-bottom: 6px;">USER WISE LEAD STATUS</div>
     <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
       <thead>
         <tr>
-          <th style="padding: 6px; text-align: left; border: 1px solid #000000; font-size: 10px; font-weight: 900; background-color: #f3f4f6;">User</th>
-          ${allStateKeys.map(state => `<th style="padding: 6px; text-align: center; border: 1px solid #000000; font-size: 10px; font-weight: 900; background-color: #f3f4f6;">${state}</th>`).join('')}
-          <th style="padding: 6px; text-align: center; border: 1px solid #000000; font-size: 10px; font-weight: 900; background-color: #f3f4f6;">Total</th>
+          <th style="padding: 6px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; background-color: #f3f4f6;">User</th>
+          ${allStateKeys.map(state => `<th style="padding: 6px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; background-color: #f3f4f6;">${state}</th>`).join('')}
+          <th style="padding: 6px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; background-color: #f3f4f6;">Total</th>
         </tr>
       </thead>
       <tbody>
         ${userKeys.map(user => {
             const uStats = userStats[user];
-            totalUserVisits += uStats.total;
             return `
             <tr>
-              <td style="padding: 6px; border: 1px solid #000000; font-size: 10px; text-align: left;">${user}</td>
-              ${allStateKeys.map(state => `<td style="padding: 6px; border: 1px solid #000000; font-size: 10px; text-align: center;">${uStats.states[state] || 0}</td>`).join('')}
-              <td style="padding: 6px; border: 1px solid #000000; font-size: 10px; text-align: center; font-weight: bold;">${uStats.total}</td>
+              <td style="padding: 6px; border: 1px solid #000000; font-size: 12px; text-align: left;">${user}</td>
+              ${allStateKeys.map(state => `<td style="padding: 6px; border: 1px solid #000000; font-size: 12px; text-align: center;">${uStats.states[state] || 0}</td>`).join('')}
+              <td style="padding: 6px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: bold;">${uStats.total}</td>
             </tr>`;
         }).join('')}
+        <tr>
+          <td style="padding: 6px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: bold; background-color: #f9fafb;">Total</td>
+          ${allStateKeys.map(state => `<td style="padding: 6px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: bold; background-color: #f9fafb;">${stateTotals[state]}</td>`).join('')}
+          <td style="padding: 6px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: bold; background-color: #f9fafb;">${grandTotalStates}</td>
+        </tr>
       </tbody>
     </table>
     `;
 
     // User Wise Source
     userSourcesHtml = `
-    <div style="font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase; margin-top: 20px; margin-bottom: 6px;">USER WISE SOURCE</div>
+    <div style="font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase; margin-top: 20px; margin-bottom: 6px;">USER WISE SOURCE</div>
     <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
       <thead>
         <tr>
-          <th style="padding: 6px; text-align: left; border: 1px solid #000000; font-size: 10px; font-weight: 900; background-color: #f3f4f6;">User</th>
-          ${finalSourceOrder.map(source => `<th style="padding: 6px; text-align: center; border: 1px solid #000000; font-size: 10px; font-weight: 900; background-color: #f3f4f6;">${source}</th>`).join('')}
-          <th style="padding: 6px; text-align: center; border: 1px solid #000000; font-size: 10px; font-weight: 900; background-color: #f3f4f6;">Total</th>
+          <th style="padding: 6px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; background-color: #f3f4f6;">User</th>
+          ${finalSourceOrder.map(source => `<th style="padding: 6px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; background-color: #f3f4f6;">${source}</th>`).join('')}
+          <th style="padding: 6px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; background-color: #f3f4f6;">Total</th>
         </tr>
       </thead>
       <tbody>
@@ -358,11 +387,16 @@ async function generateMonthlySummaryImage(
             const uStats = userStats[user];
             return `
             <tr>
-              <td style="padding: 6px; border: 1px solid #000000; font-size: 10px; text-align: left;">${user}</td>
-              ${finalSourceOrder.map(source => `<td style="padding: 6px; border: 1px solid #000000; font-size: 10px; text-align: center;">${uStats.sources[source] || 0}</td>`).join('')}
-              <td style="padding: 6px; border: 1px solid #000000; font-size: 10px; text-align: center; font-weight: bold;">${uStats.total}</td>
+              <td style="padding: 6px; border: 1px solid #000000; font-size: 12px; text-align: left;">${user}</td>
+              ${finalSourceOrder.map(source => `<td style="padding: 6px; border: 1px solid #000000; font-size: 12px; text-align: center;">${uStats.sources[source] || 0}</td>`).join('')}
+              <td style="padding: 6px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: bold;">${uStats.total}</td>
             </tr>`;
         }).join('')}
+        <tr>
+          <td style="padding: 6px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: bold; background-color: #f9fafb;">Total</td>
+          ${finalSourceOrder.map(source => `<td style="padding: 6px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: bold; background-color: #f9fafb;">${sourceTotals[source]}</td>`).join('')}
+          <td style="padding: 6px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: bold; background-color: #f9fafb;">${grandTotalSources}</td>
+        </tr>
       </tbody>
     </table>
     `;
@@ -371,14 +405,14 @@ async function generateMonthlySummaryImage(
   container.innerHTML = `
     <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
+        <div style="font-size: 16px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 16px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">${siteName}</div>
+        <div style="font-size: 18px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 12px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000;">${reportTitle}</div>
+        <div style="font-size: 14px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000;">${reportTitle}</div>
       </div>
 
-      <div style="padding: 5px 2px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; padding-left: 15px; padding-right: 15px;">
+      <div style="padding: 5px 2px; display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; padding-left: 15px; padding-right: 15px;">
         <span>Start Date: ${startDate}</span>
         <span>End Date: ${endDate}</span>
       </div>
@@ -386,64 +420,66 @@ async function generateMonthlySummaryImage(
       <!-- Summary Metrics Box -->
       <div style="margin: 15px 15px 20px 15px; border: 1px solid #000000; padding: 12px 0; display: flex; justify-content: space-between;">
           <div style="flex: 1; text-align: center; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
-              <div style="font-size: 10px; font-weight: 800; font-family: 'Arial', sans-serif; color: #4b5563; text-transform: uppercase; margin-bottom: 5px; line-height: 1.3; min-height: 26px; display: flex; align-items: flex-end;">Total No. of<br>Visits</div>
-              <div style="font-size: 18px; font-weight: 900; color: #000000;">${totalVisits}</div>
+              <div style="font-size: 12px; font-weight: 800; font-family: 'Arial', sans-serif; color: #4b5563; text-transform: uppercase; margin-bottom: 5px; line-height: 1.3; min-height: 26px; display: flex; align-items: flex-end;">Total No. of<br>Visits</div>
+              <div style="font-size: 20px; font-weight: 900; color: #000000;">${totalVisits}</div>
           </div>
-          <div style="flex: 1; text-align: center; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
-              <div style="font-size: 10px; font-weight: 800; font-family: 'Arial', sans-serif; color: #4b5563; text-transform: uppercase; margin-bottom: 5px; line-height: 1.3; min-height: 26px; display: flex; align-items: flex-end;">Total No. of<br>Revisits</div>
-              <div style="font-size: 18px; font-weight: 900; color: #000000;">${totalRevisits}</div>
+          <div style="flex: 1; text-align: center; ${userStats ? '' : 'border-right: 1px solid #e5e7eb;'} display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
+              <div style="font-size: 12px; font-weight: 800; font-family: 'Arial', sans-serif; color: #4b5563; text-transform: uppercase; margin-bottom: 5px; line-height: 1.3; min-height: 26px; display: flex; align-items: flex-end;">Total No. of<br>Revisits</div>
+              <div style="font-size: 20px; font-weight: 900; color: #000000;">${totalRevisits}</div>
           </div>
+          ${userStats ? '' : `
           <div style="flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
-              <div style="font-size: 10px; font-weight: 800; font-family: 'Arial', sans-serif; color: #4b5563; text-transform: uppercase; margin-bottom: 5px; line-height: 1.3; min-height: 26px; display: flex; align-items: flex-end;">Bookings</div>
-              <div style="font-size: 18px; font-weight: 900; color: #000000;">${totalBookings}</div>
+              <div style="font-size: 12px; font-weight: 800; font-family: 'Arial', sans-serif; color: #4b5563; text-transform: uppercase; margin-bottom: 5px; line-height: 1.3; min-height: 26px; display: flex; align-items: flex-end;">Bookings</div>
+              <div style="font-size: 20px; font-weight: 900; color: #000000;">${totalBookings}</div>
           </div>
+          `}
       </div>
 
       <div style="padding: 0 15px 15px 15px;">
+        ${userStats ? `
+        ${userStatesHtml}
+        ${userSourcesHtml}
+        ` : `
         <!-- Lead Status Summary -->
-        <div style="font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase; margin-bottom: 6px;">LEAD STATUS SUMMARY</div>
+        <div style="font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase; margin-bottom: 6px;">LEAD STATUS SUMMARY</div>
         <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; margin-bottom: 20px;">
           <thead>
             <tr>
-              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">State</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Presales</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
+              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">State</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Presales</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
             </tr>
           </thead>
           <tbody>
             ${summaryRowsHtml}
             <tr>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; background-color: #f9fafb;">Total</td>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalStatusPresales}</td>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalStatusSalesGre}</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: right; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; background-color: #f9fafb;">Total</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalStatusPresales}</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalStatusSalesGre}</td>
             </tr>
           </tbody>
         </table>
 
         <!-- Source Summary -->
-        <div style="font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
+        <div style="font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
         <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
           <thead>
             <tr>
-              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Source</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Presales</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
+              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Source</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Presales</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Sales + GRE</th>
             </tr>
           </thead>
           <tbody>
             ${sourceRowsHtml}
             <tr>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; background-color: #f9fafb;">Total Visits</td>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSourcePresales}</td>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSourceSalesGre}</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: right; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; background-color: #f9fafb;">Total Visits</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSourcePresales}</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSourceSalesGre}</td>
             </tr>
           </tbody>
         </table>
-        
-        ${userStats ? `
-        ${userStatesHtml}
-        ${userSourcesHtml}
-        ` : ''}
+        `}
       </div>
     </div>
   `;
