@@ -498,32 +498,31 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
           let siteName = DEFAULT_SITE;
           let team = '-';
 
-          // 1. Try projectmapping.ts first
-          let matchedUserKey = Object.keys(normalizedMapping).find(k => {
-            return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
-          });
-          if (matchedUserKey) {
-            siteName = normalizedMapping[matchedUserKey];
-          }
-
-          // 2. If still default, check Project Column
+          // 1. First, check the Project Column
           const rawProject = projectIdx !== -1 ? String(row[projectIdx]).toLowerCase().trim() : '';
+          if (rawProject.includes('kairos')) siteName = 'Kairos';
+          else if (rawProject.includes('aqua') || rawProject.includes('aqualife')) siteName = 'Aqua Life';
+          else if (rawProject.includes('milestone')) siteName = 'Milestone';
+          else if (rawProject.includes('statement')) siteName = 'Statement';
+          else if (rawProject.includes('ekam')) siteName = 'Legacy Ekam';
+
+          // 2. If Project Column didn't help (or was missing), try mapping
+          let matchedUserKey = Object.keys(normalizedMapping).find(k => {
+             return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
+          });
+          
           if (siteName === DEFAULT_SITE) {
-            if (rawProject.includes('kairos')) siteName = 'Kairos';
-            else if (rawProject.includes('aqua') || rawProject.includes('aqualife')) siteName = 'Aqua Life';
-            else if (rawProject.includes('milestone')) siteName = 'Milestone';
-            else if (rawProject.includes('statement')) siteName = 'Statement';
+              if (matchedUserKey) {
+                siteName = normalizedMapping[matchedUserKey];
+              }
           }
 
-          // 3. Override for Legacy Ekam
-          if (rawProject.includes('ekam')) {
-              siteName = 'Legacy Ekam';
-          }
-
-          // Always try to find team using assignedLower
+          // Always try to find team using assignedLower, or mapped user key
           let matchedTeamKey = Object.keys(normalizedTeamMapping).find(k => assignedLower.includes(k));
           if (matchedTeamKey) {
-              team = normalizedTeamMapping[matchedTeamKey];
+             team = normalizedTeamMapping[matchedTeamKey];
+          } else if (matchedUserKey && normalizedTeamMapping[matchedUserKey]) {
+             team = normalizedTeamMapping[matchedUserKey];
           }
 
           const name = row[nameIdx] ? String(row[nameIdx]).trim() : '-';
