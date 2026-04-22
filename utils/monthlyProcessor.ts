@@ -633,8 +633,8 @@ export async function processMonthlyFile(files: File | File[], manualStartDate?:
           let siteName = DEFAULT_SITE;
           let team = '-';
 
-          // Special logic for specific users: Manisha Singh, Smita Kad, Sejal Satav
-          const specificUsers = ["manisha singh", "smita kad", "sejal satav"];
+          // Special logic for specific users: Manisha Singh, Smita Kad, Sejal Satav, Deepak Keshri
+          const specificUsers = ["manisha singh", "smita kad", "sejal satav", "deepak keshri"];
           const isSpecificUser = specificUsers.some(u => assignedLower.includes(u));
 
           if (isSpecificUser) {
