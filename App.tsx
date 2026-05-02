@@ -9,6 +9,7 @@ import { processDailySiteVisitFile } from './utils/dailySiteVisitProcessor';
 import { processWeeklySiteVisitFile } from './utils/weeklySiteVisitProcessor';
 import { processMonthlyLeadSiteVisitFile } from './utils/monthlyLeadSiteVisitProcessor';
 import { processPresalesLeadsFile } from './utils/presalesLeadsProcessor';
+import { processProjectWiseSourceFile } from './utils/projectWiseSourceProcessor';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Daily Report Processor');
@@ -51,6 +52,8 @@ const App: React.FC = () => {
         data = await processDailySiteVisitFile(file!, startDate, endDate, selectedSource);
       } else if (activeTab === 'Presales Leads Report') {
         data = await processPresalesLeadsFile(file!);
+      } else if (activeTab === 'Project Wise Lead Source Report') {
+        data = await processProjectWiseSourceFile(file!, startDate, endDate);
       } else {
         // Default to Daily Report Processor
         data = await processFile(file!);
@@ -112,6 +115,7 @@ const App: React.FC = () => {
     { id: 'User Wise Site Visit Report', label: 'User Wise Site Visit Report', icon: Users },
     { id: 'Monthly (Lead + Site Visit) Report', label: 'Monthly (Lead + Site Visit) Report', icon: FileText },
     { id: 'Presales Leads Report', label: 'Presales Leads Report', icon: Users },
+    { id: 'Project Wise Lead Source Report', label: 'Project Wise Lead Source Report', icon: FileText },
   ];
 
   const isProcessorTab = tabs.map(t => t.id).includes(activeTab);
@@ -200,7 +204,9 @@ const App: React.FC = () => {
                         ? 'Automated monthly lead & site visit summary grouped by project.'
                         : activeTab === 'Presales Leads Report'
                           ? 'Automated presales leads summary grouped by user and lead details.'
-                          : 'Automated formatting for Project Performance Reports (Browser Mode)'}
+                          : activeTab === 'Project Wise Lead Source Report'
+                            ? 'Project-wise lead source segregation (Digital & Offline excluded).'
+                            : 'Automated formatting for Project Performance Reports (Browser Mode)'}
               </p>
             </div>
 

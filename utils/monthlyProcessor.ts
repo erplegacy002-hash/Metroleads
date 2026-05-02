@@ -633,31 +633,43 @@ export async function processMonthlyFile(files: File | File[], manualStartDate?:
           let siteName = DEFAULT_SITE;
           let team = '-';
 
-          // 1. First, check the Project Column
-          const rawProject = projectIdx !== -1 ? String(row[projectIdx]).toLowerCase().trim() : '';
-          if (rawProject.includes('kairos')) siteName = 'Kairos';
-          else if (rawProject.includes('aqua') || rawProject.includes('aqualife')) siteName = 'Aqua Life';
-          else if (rawProject.includes('milestone')) siteName = 'Milestone';
-          else if (rawProject.includes('statement')) siteName = 'Statement';
-          else if (rawProject.includes('ekam')) siteName = 'Legacy Ekam';
+          // Special logic for specific users: Manisha Singh, Smita Kad, Sejal Satav, Deepak Keshri
+          const specificUsers = ["manisha singh", "smita kad", "sejal satav", "deepak keshri"];
+          const isSpecificUser = specificUsers.some(u => assignedLower.includes(u));
 
-          // 2. If Project Column didn't help (or was missing), try mapping
-          let matchedUserKey = Object.keys(normalizedMapping).find(k => {
-             return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
-          });
-          
-          if (siteName === DEFAULT_SITE) {
+          if (isSpecificUser) {
+             // Look into 'Project' column for keywords
+             const rawProject = projectIdx !== -1 ? row[projectIdx] : '';
+             const projectVal = String(rawProject).toLowerCase().trim();
+             
+             if (projectVal.includes('kairos')) siteName = 'Kairos';
+             else if (projectVal.includes('aqua') || projectVal.includes('aqualife')) siteName = 'Aqua Life';
+             else if (projectVal.includes('milestone')) siteName = 'Milestone';
+             else if (projectVal.includes('statement')) siteName = 'Statement';
+             else if (projectVal.includes('ekam')) siteName = 'Legacy Ekam';
+             
+             // Try to assign team based on user mapping if available, otherwise default
+             let matchedTeamKey = Object.keys(normalizedTeamMapping).find(k => assignedLower.includes(k));
+             if (matchedTeamKey) {
+                team = normalizedTeamMapping[matchedTeamKey];
+             }
+          } else {
+              // Standard Fuzzy match / Check mapping
+              let matchedUserKey = Object.keys(normalizedMapping).find(k => {
+                return assignedLower === k || assignedLower.includes(k) || k.includes(assignedLower);
+              });
+              
               if (matchedUserKey) {
                 siteName = normalizedMapping[matchedUserKey];
               }
-          }
 
-          // Always try to find team using assignedLower, or mapped user key
-          let matchedTeamKey = Object.keys(normalizedTeamMapping).find(k => assignedLower.includes(k));
-          if (matchedTeamKey) {
-             team = normalizedTeamMapping[matchedTeamKey];
-          } else if (matchedUserKey && normalizedTeamMapping[matchedUserKey]) {
-             team = normalizedTeamMapping[matchedUserKey];
+              // Always try to find team using assignedLower, or mapped user key
+              let matchedTeamKey = Object.keys(normalizedTeamMapping).find(k => assignedLower.includes(k));
+              if (matchedTeamKey) {
+                 team = normalizedTeamMapping[matchedTeamKey];
+              } else if (matchedUserKey && normalizedTeamMapping[matchedUserKey]) {
+                 team = normalizedTeamMapping[matchedUserKey];
+              }
           }
 
           const name = row[nameIdx] ? String(row[nameIdx]).trim() : '-';
