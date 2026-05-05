@@ -6,10 +6,16 @@ import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './project
 
 // --- Helpers ---
 
+function getCellValue(cell: any): string {
+    if (cell === null || cell === undefined) return '';
+    if (typeof cell === 'object' && cell.v !== undefined) return String(cell.v);
+    return String(cell);
+}
+
 function findColumnIndex(headerRow: any[], possibleNames: string[]): number {
   return headerRow.findIndex(h => {
     if (!h) return false;
-    const lowerH = String(h).toLowerCase().trim();
+    const lowerH = getCellValue(h).toLowerCase().trim();
     return possibleNames.some(p => lowerH === p || lowerH.includes(p));
   });
 }
@@ -127,6 +133,19 @@ export async function processProjectWiseSourceFile(
     const rawData = utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: null }) as any[][];
     if (rawData.length === 0) throw new Error("Excel file is empty");
 
+    // Preserve hyperlinks
+    for(let R = 0; R < rawData.length; R++) {
+        const row = rawData[R];
+        if (!row || !Array.isArray(row)) continue;
+        for(let C = 0; C < row.length; C++) {
+             const cell_ref = utils.encode_cell({ c: C, r: R });
+             const originalCell = worksheet[cell_ref];
+             if (originalCell && originalCell.l && originalCell.l.Target) {
+                 row[C] = { v: row[C] !== null ? row[C] : '', t: originalCell.t || 's', l: originalCell.l };
+             }
+        }
+    }
+
     const maxColLength = Math.max(...rawData.map(r => (r && Array.isArray(r)) ? r.length : 0));
 
     let headerIndex = -1;
@@ -173,18 +192,18 @@ export async function processProjectWiseSourceFile(
         // Filter out 'test'
         const isExcluded = row.some(cell => {
              if (!cell) return false;
-             const s = String(cell).toLowerCase();
+             const s = getCellValue(cell).toLowerCase();
              return s.includes('metro') || s.includes('test') || s.includes('ramesh bodke');
         });
         if (isExcluded) continue;
 
         const rawAssigned = row[assignedToIdx];
-        const assignedStr = rawAssigned ? String(rawAssigned).trim() : "Unassigned";
+        const assignedStr = rawAssigned ? getCellValue(rawAssigned).trim() : "Unassigned";
         const assignedLower = assignedStr.toLowerCase();
 
         // 1. First, check the Project Column
         let siteName = DEFAULT_SITE;
-        const rawProject = projectIdx !== -1 ? String(row[projectIdx]).toLowerCase().trim() : '';
+        const rawProject = projectIdx !== -1 ? getCellValue(row[projectIdx]).toLowerCase().trim() : '';
         if (rawProject.includes('kairos')) siteName = 'Kairos';
         else if (rawProject.includes('aqua') || rawProject.includes('aqualife')) siteName = 'Aqua Life';
         else if (rawProject.includes('milestone')) siteName = 'Milestone';
@@ -203,10 +222,10 @@ export async function processProjectWiseSourceFile(
         }
 
         const sourceVals = [
-            sourceIdx !== -1 ? String(row[sourceIdx] || '') : '',
-            subSourceIdx !== -1 ? String(row[subSourceIdx] || '') : '',
-            subSubSourceIdx !== -1 ? String(row[subSubSourceIdx] || '') : '',
-            additionalSourceIdx !== -1 ? String(row[additionalSourceIdx] || '') : ''
+            sourceIdx !== -1 ? getCellValue(row[sourceIdx]) : '',
+            subSourceIdx !== -1 ? getCellValue(row[subSourceIdx]) : '',
+            subSubSourceIdx !== -1 ? getCellValue(row[subSubSourceIdx]) : '',
+            additionalSourceIdx !== -1 ? getCellValue(row[additionalSourceIdx]) : ''
         ];
 
         const determinedSource = determineSource(sourceVals);
