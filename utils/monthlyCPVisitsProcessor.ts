@@ -1,9 +1,16 @@
-import { read, utils } from 'xlsx';
+import { read, utils, write } from 'xlsx';
 import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
-import { jsPDF } from 'jspdf';
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { GeneratedImage, ProcessResponse } from '../types';
 import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './projectMapping';
+
+export interface UserStatsData {
+  total: number;
+  states: Record<string, number>;
+  sources: Record<string, number>;
+}
 
 // --- Helpers ---
 
@@ -66,7 +73,6 @@ function formatDate(date: Date): string {
 }
 
 function determineSource(cpData: any, sourceData: any, subSourceData: any): string {
-  // 1. If CP Firm Name exists and is not '-', it is a Channel Partner
   const cpFirm = cpData ? String(cpData).trim() : '';
   if (cpFirm.length > 0 && cpFirm !== '-') {
     return 'Channel Partner';
@@ -103,18 +109,118 @@ function determineSource(cpData: any, sourceData: any, subSourceData: any): stri
   return '-';
 }
 
-// --- Image Generation: Summary (Modified for Lead + Site Visit) ---
+// --- Image Generation: Main List ---
+
+async function generateMonthlyListImage(siteName: string, rows: any[], reportTitle: string, startDate: string, endDate: string): Promise<string> {
+  const doc = new jsPDF({ orientation: 'landscape' });
+
+  // Header
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("SITE VISIT", 148, 15, { align: "center" });
+  
+  doc.setLineWidth(0.5);
+  doc.line(128, 17, 168, 17); // Underline
+
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text(siteName.toUpperCase(), 148, 25, { align: "center" });
+
+  doc.setLineWidth(0.5);
+  doc.line(128, 27, 168, 27); // Underline
+
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text(reportTitle, 148, 33, { align: "center" });
+
+  // Date Range
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Start Date: ${startDate}`, 14, 40);
+  doc.text(`End Date: ${endDate}`, 282, 40, { align: "right" });
+
+  // Table Data
+  const tableBody = rows.map((row, index) => [
+    index + 1,
+    row.name,
+    row.team,
+    row.source,
+    row.cpFirmName,
+    row.date,
+    row.date2,
+    row.date3,
+    row.date4,
+    row.date5,
+    row.state
+  ]);
+
+  autoTable(doc, {
+    startY: 45,
+    head: [['Sr. No.', 'Visitor Name', 'Team', 'Source', 'CP Firm Name', 'Visit Date', '2nd Visit', '3rd Visit', '4th Visit', '5th Visit', 'State']],
+    body: tableBody,
+    theme: 'grid',
+    styles: { 
+      fontSize: 8, 
+      cellPadding: 2,
+      lineColor: [0, 0, 0],
+      lineWidth: 0.1,
+      textColor: [0, 0, 0]
+    },
+    headStyles: { 
+      fillColor: [243, 244, 246], 
+      textColor: [0, 0, 0], 
+      fontStyle: 'bold', 
+      lineWidth: 0.1, 
+      lineColor: [0, 0, 0],
+      halign: 'center'
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 15 }, // Sr No
+      1: { halign: 'left' }, // Name
+      2: { halign: 'center' }, // Team
+      3: { halign: 'center' }, // Source
+      4: { halign: 'center' }, // CP Firm
+      5: { halign: 'center' }, // Date
+      6: { halign: 'center' }, // Date 2
+      7: { halign: 'center' }, // Date 3
+      8: { halign: 'center' }, // Date 4
+      9: { halign: 'center' }, // Date 5
+      10: { halign: 'center' } // State
+    },
+    margin: { bottom: 40, top: 45 }, // Increased bottom margin
+    didDrawPage: (data) => {
+        // Header on subsequent pages
+        if (data.pageNumber > 1) {
+             doc.setFontSize(10);
+             doc.setFont("helvetica", "bold");
+             doc.text(`${siteName} - Site Visit Report`, 14, 25);
+             doc.setFontSize(8);
+             doc.setFont("helvetica", "normal");
+             doc.text(`Start: ${startDate} | End: ${endDate}`, 14, 35);
+        }
+
+        // Footer with page number
+        const pageSize = doc.internal.pageSize;
+        const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+        doc.setFontSize(8);
+        doc.text('Page ' + String(data.pageNumber), data.settings.margin.left, pageHeight - 15);
+    }
+  });
+
+  return doc.output('datauristring');
+}
+
+// --- Image Generation: Summary ---
 
 interface TeamCounts {
   presales: number;
   salesGre: number;
 }
 
-  async function generateMonthlyLeadSummaryImage(
+async function generateMonthlySummaryImage(
   siteName: string, 
   rows: any[], 
-  summaryStats: Record<string, TeamCounts>, 
-  sourceStats: Record<string, TeamCounts>, 
+  cpStats: Record<string, number>, 
   reportTitle: string, 
   startDate: string, 
   endDate: string
@@ -124,7 +230,7 @@ interface TeamCounts {
     position: 'fixed',
     top: '0',
     left: '0',
-    width: '450px', 
+    width: '500px', 
     backgroundColor: '#ffffff', 
     padding: '15px', 
     fontFamily: "'Calibri', sans-serif",
@@ -133,79 +239,45 @@ interface TeamCounts {
     pointerEvents: 'none'
   });
 
-  // Calculate Metrics for Header Box (Used internally or for future use, box removed from UI)
-  const totalRows = rows.length; 
-  const countDate2 = rows.filter(r => r.date2 && r.date2 !== '-').length;
-  const countDate3 = rows.filter(r => r.date3 && r.date3 !== '-').length;
-  const countDate4 = rows.filter(r => r.date4 && r.date4 !== '-').length;
-  const countDate5 = rows.filter(r => r.date5 && r.date5 !== '-').length;
-  const totalRevisits = countDate2 + countDate3 + countDate4 + countDate5;
-  const totalVisits = totalRows + totalRevisits;
-  const totalBookings = (summaryStats['Booked']?.presales || 0) + (summaryStats['Booked']?.salesGre || 0);
+  const validCpKeys = Object.keys(cpStats).sort((a,b) => cpStats[b] - cpStats[a]);
+  const totalCpVisits = validCpKeys.reduce((acc, k) => acc + cpStats[k], 0);
 
-  // Table Footer Calculation
-  const totalSourcePresales = Object.entries(sourceStats)
-    .filter(([key]) => key !== 'Revisit')
-    .reduce((a, [_, b]) => a + b.presales, 0);
-    
-  const totalSourceSalesGre = Object.entries(sourceStats)
-    .filter(([key]) => key !== 'Revisit')
-    .reduce((a, [_, b]) => a + b.salesGre, 0);
-
-  // Define display order for Sources
-  const mandatorySources = ["Digital", "Channel Partner", "Referral", "Offer", "Walk-In", "Hoarding"];
-  const otherSources = Object.keys(sourceStats).filter(k => !mandatorySources.includes(k) && k !== 'Revisit');
-  const finalSourceOrder = [...mandatorySources, ...otherSources, "Revisit"];
-
-  const sourceRowsHtml = finalSourceOrder.map(source => {
-    const counts = sourceStats[source] || { presales: 0, salesGre: 0 };
-    // Filter out rows with 0 in both columns
-    if (counts.presales === 0 && counts.salesGre === 0) return '';
+  const cpRowsHtml = validCpKeys.map(cp => {
     return `
     <tr>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: left; color: #000000;">${source}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.presales}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000;">${counts.salesGre}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: left; color: #000000;">${cp}</td>
+      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: center; font-weight: 700; color: #000000;">${cpStats[cp]}</td>
     </tr>`;
   }).join('');
 
   container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box; font-family: 'Calibri', sans-serif;">
+    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
       <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
+        <div style="font-size: 16px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 16px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">${siteName}</div>
+        <div style="font-size: 18px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">${siteName}</div>
         <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 12px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000;">${reportTitle}</div>
+        <div style="font-size: 14px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000;">${reportTitle}</div>
       </div>
 
-      <div style="padding: 5px 2px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; padding-left: 15px; padding-right: 15px;">
+      <div style="padding: 5px 2px; display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; padding-left: 15px; padding-right: 15px;">
         <span>Start Date: ${startDate}</span>
         <span>End Date: ${endDate}</span>
       </div>
 
-      <!-- Spacer -->
-      <div style="height: 15px;"></div>
-
-      <div style="padding: 0 15px 40px 15px;">
-        <!-- Lead Status Summary Removed for this report -->
-
-        <!-- Source Summary -->
-        <div style="font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase; margin-bottom: 6px;">SOURCE SUMMARY</div>
+      <div style="padding: 0 15px 15px 15px; margin-top: 20px;">
         <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
           <thead>
             <tr>
-              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Source</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Leads</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 12px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Site Visits</th>
+              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">CP Firm Name</th>
+              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Visit Count</th>
             </tr>
           </thead>
           <tbody>
-            ${sourceRowsHtml}
+            ${cpRowsHtml}
             <tr>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: right; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; background-color: #f9fafb;">Total</td>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSourcePresales}</td>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 12px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalSourceSalesGre}</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: right; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; background-color: #f9fafb;">Total</td>
+               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalCpVisits}</td>
             </tr>
           </tbody>
         </table>
@@ -223,8 +295,6 @@ interface TeamCounts {
   }
 }
 
-// --- Main Processor ---
-
 function findColumnIndex(row: any[], aliases: string[]): number {
   for (const alias of aliases) {
     const idx = row.findIndex(c => c && String(c).toLowerCase().trim() === alias);
@@ -233,17 +303,41 @@ function findColumnIndex(row: any[], aliases: string[]): number {
   return -1;
 }
 
-export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDate?: string, manualEndDate?: string, sourceFilter: string = 'All'): Promise<ProcessResponse> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const data = e.target?.result;
+export async function processMonthlyCPVisitsFile(files: File | File[], manualStartDate?: string, manualEndDate?: string, sourceFilter: string = 'All', isUserWise: boolean = false): Promise<ProcessResponse> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const fileArray = Array.isArray(files) ? files : [files];
+      if (fileArray.length === 0) throw new Error("No files provided.");
+
+      const startFilter = manualStartDate ? parseDate(manualStartDate) : null;
+      const endFilter = manualEndDate ? parseDate(manualEndDate) : null;
+
+      const normalizedMapping: Record<string, string> = {};
+      Object.keys(USER_PROJECT_MAPPING).forEach(k => {
+        normalizedMapping[k.toLowerCase().trim()] = USER_PROJECT_MAPPING[k];
+      });
+
+      const normalizedTeamMapping: Record<string, string> = {};
+      Object.keys(USER_TEAM_MAPPING).forEach(k => {
+        normalizedTeamMapping[k.toLowerCase().trim()] = USER_TEAM_MAPPING[k];
+      });
+
+      const sites: Record<string, any[]> = {};
+      const seenRecords = new Set<string>();
+      let globalHeaderRow: any[] | null = null;
+
+      for (const file of fileArray) {
+        const data = await new Promise<ArrayBuffer>((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = (e) => res(e.target?.result as ArrayBuffer);
+          reader.onerror = rej;
+          reader.readAsArrayBuffer(file);
+        });
         const workbook = read(data, { type: 'array', cellDates: true });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rawRows = utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
 
-        if (!rawRows || rawRows.length === 0) throw new Error("Excel file is empty.");
+        if (!rawRows || rawRows.length === 0) continue;
 
         // Detect Columns
         let headerIndex = -1;
@@ -322,24 +416,15 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
           }
         }
 
-        if (headerIndex === -1) throw new Error("Could not find required columns (Name, Assigned To, etc).");
+        if (headerIndex === -1) {
+          console.warn(`Could not find required columns in file ${file.name}. Skipping.`);
+          continue;
+        }
 
-        const startFilter = manualStartDate ? parseDate(manualStartDate) : null;
-        const endFilter = manualEndDate ? parseDate(manualEndDate) : null;
+        if (!globalHeaderRow) {
+          globalHeaderRow = rawRows[headerIndex];
+        }
 
-        const normalizedMapping: Record<string, string> = {};
-        Object.keys(USER_PROJECT_MAPPING).forEach(k => {
-          normalizedMapping[k.toLowerCase().trim()] = USER_PROJECT_MAPPING[k];
-        });
-
-        const normalizedTeamMapping: Record<string, string> = {};
-        Object.keys(USER_TEAM_MAPPING).forEach(k => {
-          normalizedTeamMapping[k.toLowerCase().trim()] = USER_TEAM_MAPPING[k];
-        });
-
-        const sites: Record<string, any[]> = {};
-        const seenRecords = new Set<string>();
-        
         for (let i = headerIndex + 1; i < rawRows.length; i++) {
           const row = rawRows[i];
           if (!row || row.length === 0) continue;
@@ -429,22 +514,17 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
           const d5 = visitDate5Idx !== -1 ? parseDate(row[visitDate5Idx]) : null;
 
           let selectedDate: Date | null = null;
-          const datesToCheck = [d1, d2, d3, d4, d5].filter(d => d !== null) as Date[];
 
           if (startFilter && endFilter) {
+              const datesToCheck = [d1, d2, d3, d4, d5].filter(d => d !== null) as Date[];
               const datesInRange = datesToCheck.filter(d => d >= startFilter && d <= endFilter);
               
-              // If dates exist but NONE are in range, skip.
-              // If NO dates exist, keep the record (count as Lead without Visit).
-              if (datesToCheck.length > 0 && datesInRange.length === 0) {
-                 continue; 
-              }
+              if (datesInRange.length === 0) continue; 
               
-              if (datesInRange.length > 0) {
-                datesInRange.sort((a,b) => b.getTime() - a.getTime());
-                selectedDate = datesInRange[0];
-              }
+              datesInRange.sort((a,b) => b.getTime() - a.getTime());
+              selectedDate = datesInRange[0];
           } else {
+              const datesToCheck = [d1, d2, d3, d4, d5].filter(d => d !== null) as Date[];
               if (datesToCheck.length > 0) {
                    datesToCheck.sort((a,b) => b.getTime() - a.getTime());
                    selectedDate = datesToCheck[0];
@@ -458,6 +538,7 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
           const source = determineSource(cpData, leadSourceData, subSourceData);
           const cpFirmName = cpData ? String(cpData).trim() : '-';
 
+          if (source !== 'Channel Partner') continue;
           // Deduplication Check
           const uniqueKey = `${siteName}|${name}|${d1 ? d1.getTime() : 'no_date'}`;
           if (seenRecords.has(uniqueKey)) continue;
@@ -471,17 +552,24 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
             team,
             source,
             cpFirmName,
+            assignedTo: assignedStr,
             date: d1 ? formatDate(d1) : '-',
             date2: d2 ? formatDate(d2) : '-',
             date3: d3 ? formatDate(d3) : '-',
             date4: d4 ? formatDate(d4) : '-',
             date5: d5 ? formatDate(d5) : '-',
             rawDateVal: selectedDate,
-            sortDate: d1 // Store 1st visit date for sorting
+            sortDate: d1, // Store 1st visit date for sorting
+            originalRow: row
           });
         }
+      } // End of file loop
 
-        const images: GeneratedImage[] = [];
+      if (!globalHeaderRow) {
+        throw new Error("Could not find required columns in any of the provided files.");
+      }
+
+      const images: GeneratedImage[] = [];
         const zip = new JSZip();
         const siteKeys = Object.keys(sites);
 
@@ -490,7 +578,7 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
         const manualStartFormatted = startFilter ? formatDate(startFilter) : null;
         const manualEndFormatted = endFilter ? formatDate(endFilter) : null;
 
-        let dateLabel = "MONTHLY REPORT";
+        let dateLabel = isUserWise ? "USER WISE REPORT" : "MONTHLY REPORT";
 
         for (const site of siteKeys) {
           let rows = sites[site];
@@ -535,41 +623,34 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
           const finalStartDateStr = manualStartFormatted || autoStartDateStr;
           const finalEndDateStr = manualEndFormatted || autoEndDateStr;
 
-          const summaryStats: Record<string, TeamCounts> = {};
-          const sourceStats: Record<string, TeamCounts> = {};
+          const cpStats: Record<string, number> = {};
 
-          const incrementStats = (stats: Record<string, TeamCounts>, key: string, isPresales: boolean) => {
-            if (!stats[key]) stats[key] = { presales: 0, salesGre: 0 };
-            if (isPresales) {
-                stats[key].presales++;
-            } else {
-                stats[key].salesGre++;
-            }
-          };
-          
           rows.forEach(r => {
-             const isPresales = r.team === 'Presales';
-             incrementStats(summaryStats, r.state, isPresales);
-             incrementStats(sourceStats, r.source, isPresales);
+    const name = (r.cpFirmName && r.cpFirmName !== '-') ? r.cpFirmName : 'Not Specified';
+cpStats[name] = (cpStats[name] || 0) + 1;
+});
 
-             let isRevisit = false;
-             if (r.date5 && r.date5 !== '-') {
-                 isRevisit = true;
-             } else if (r.date4 && r.date4 !== '-') {
-                 isRevisit = true;
-             } else if (r.date3 && r.date3 !== '-') {
-                 isRevisit = true;
-             } else if (r.date2 && r.date2 !== '-') {
-                 isRevisit = true;
-             }
-             if (isRevisit) {
-                 incrementStats(sourceStats, 'Revisit', isPresales);
-             }
-          });
+          // Generate List as PDF
+          const pdfDataUrl = await generateMonthlyListImage(site, rows, dateLabel, finalStartDateStr, finalEndDateStr);
+          
+          const listFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_site_visit.pdf`;
+          images.push({ project_name: site, image_url: pdfDataUrl, filename: listFilename });
+          zip.file(listFilename, pdfDataUrl.split(',')[1], { base64: true });
 
-          // Generate Summary ONLY (Modified)
-          const summaryDataUrl = await generateMonthlyLeadSummaryImage(site, rows, summaryStats, sourceStats, dateLabel, finalStartDateStr, finalEndDateStr);
-          const summaryFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_monthly_lead_summary.png`;
+          // Generate Raw Excel
+          const excelRows = rows.map(r => r.originalRow);
+          const excelData = [globalHeaderRow, ...excelRows];
+          const ws = utils.aoa_to_sheet(excelData);
+          const wb = utils.book_new();
+          utils.book_append_sheet(wb, ws, "Site Visits");
+          const excelBuffer = write(wb, { bookType: 'xlsx', type: 'array' });
+          
+          const excelFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_raw.xlsx`;
+          zip.file(excelFilename, excelBuffer);
+
+          // Summary remains PNG
+          const summaryDataUrl = await generateMonthlySummaryImage(site, rows, cpStats, dateLabel, finalStartDateStr, finalEndDateStr);
+          const summaryFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${isUserWise ? 'user_wise' : 'monthly'}_summary.png`;
           images.push({ project_name: `Summary - ${site}`, image_url: summaryDataUrl, filename: summaryFilename });
           zip.file(summaryFilename, summaryDataUrl.split(',')[1], { base64: true });
         }
@@ -582,7 +663,5 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
       } catch (err: any) {
         reject(err);
       }
-    };
-    reader.readAsArrayBuffer(file);
   });
 }

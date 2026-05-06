@@ -8,6 +8,7 @@ import { processMonthlyFile } from './utils/monthlyProcessor';
 import { processDailySiteVisitFile } from './utils/dailySiteVisitProcessor';
 import { processWeeklySiteVisitFile } from './utils/weeklySiteVisitProcessor';
 import { processMonthlyLeadSiteVisitFile } from './utils/monthlyLeadSiteVisitProcessor';
+import { processMonthlyCPVisitsFile } from './utils/monthlyCPVisitsProcessor';
 import { processPresalesLeadsFile } from './utils/presalesLeadsProcessor';
 import { processProjectWiseSourceFile } from './utils/projectWiseSourceProcessor';
 
@@ -42,6 +43,8 @@ const App: React.FC = () => {
       
       if (activeTab === 'Monthly Site Visit Report') {
         data = await processMonthlyFile(file!, startDate, endDate, selectedSource);
+      } else if (activeTab === 'Monthly CP Visits Report') {
+        data = await processMonthlyCPVisitsFile(file!, startDate, endDate, selectedSource);
       } else if (activeTab === 'User Wise Site Visit Report') {
         data = await processMonthlyFile(files, startDate, endDate, selectedSource, true);
       } else if (activeTab === 'Monthly (Lead + Site Visit) Report') {
@@ -112,6 +115,7 @@ const App: React.FC = () => {
     { id: 'Daily Site Visit Report', label: 'Daily Site Visit Report', icon: MapPin },
     { id: 'Weekly Site Visit Report', label: 'Weekly Site Visit Report', icon: CalendarDays },
     { id: 'Monthly Site Visit Report', label: 'Monthly Site Visit Report', icon: CalendarRange },
+    { id: 'Monthly CP Visits Report', label: 'Monthly CP Visits Report', icon: CalendarRange },
     { id: 'User Wise Site Visit Report', label: 'User Wise Site Visit Report', icon: Users },
     { id: 'Monthly (Lead + Site Visit) Report', label: 'Monthly (Lead + Site Visit) Report', icon: FileText },
     { id: 'Presales Leads Report', label: 'Presales Leads Report', icon: Users },
@@ -196,6 +200,8 @@ const App: React.FC = () => {
               <p className="text-lg text-slate-600 max-w-2xl mx-auto font-serif italic opacity-80">
                 {activeTab === 'Monthly Site Visit Report' 
                   ? 'Automated monthly site visit summaries grouped by project.'
+                  : activeTab === 'Monthly CP Visits Report'
+                    ? 'Automated monthly CP visits summaries grouped by CP Firm.'
                   : activeTab === 'Daily Site Visit Report'
                     ? 'Automated daily site visit reports grouped by project.'
                     : activeTab === 'Weekly Site Visit Report'

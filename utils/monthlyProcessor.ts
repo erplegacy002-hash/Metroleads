@@ -548,6 +548,7 @@ export async function processMonthlyFile(files: File | File[], manualStartDate?:
         let visitDateIdx = -1, visitDate2Idx = -1, visitDate3Idx = -1, visitDate4Idx = -1, visitDate5Idx = -1;
         let cpFirmNameIdx = -1, leadSourceIdx = -1, subSourceIdx = -1;
         let projectIdx = -1;
+        let pVis1Idx = -1, pVis2Idx = -1, pVis3Idx = -1, pVis4Idx = -1, pVis5Idx = -1;
 
         const nameAliases = ['name', 'visitor name', 'lead name', 'customer name', 'full name', 'client name'];
         const stateAliases = ['lead state', 'state', 'region', 'location'];
@@ -564,6 +565,11 @@ export async function processMonthlyFile(files: File | File[], manualStartDate?:
         const subSourceAliases = ['sub source', 'sub source (u)', 'sub_source', 'subsource'];
         
         const projectAliases = ['project', 'project name', 'project (af)', 'project(af)', 'project (af', 'project(af'];
+        const pVis1Aliases = ['project visited', 'project_visited', 'project visited(af)', 'project visited 1', 'project_visited_1'];
+        const pVis2Aliases = ['project visited 2', 'project_visited_2', 'project visited 2(af)'];
+        const pVis3Aliases = ['project visited 3', 'project_visited_3', 'project visited 3(af)'];
+        const pVis4Aliases = ['project visited 4', 'project_visited_4', 'project visited 4(af)'];
+        const pVis5Aliases = ['project visited 5', 'project_visited_5', 'project visited 5(af)'];
 
         for (let i = 0; i < Math.min(100, rawRows.length); i++) {
           const row = rawRows[i];
@@ -584,6 +590,11 @@ export async function processMonthlyFile(files: File | File[], manualStartDate?:
           const ssIdx = findColumnIndex(row, subSourceAliases);
           
           const pIdx = findColumnIndex(row, projectAliases);
+          const pv1Idx = findColumnIndex(row, pVis1Aliases);
+          const pv2Idx = findColumnIndex(row, pVis2Aliases);
+          const pv3Idx = findColumnIndex(row, pVis3Aliases);
+          const pv4Idx = findColumnIndex(row, pVis4Aliases);
+          const pv5Idx = findColumnIndex(row, pVis5Aliases);
 
           if (nIdx !== -1 && aIdx !== -1) {
             headerIndex = i;
@@ -599,6 +610,11 @@ export async function processMonthlyFile(files: File | File[], manualStartDate?:
             leadSourceIdx = lsIdx;
             subSourceIdx = ssIdx;
             projectIdx = pIdx;
+            pVis1Idx = pv1Idx;
+            pVis2Idx = pv2Idx;
+            pVis3Idx = pv3Idx;
+            pVis4Idx = pv4Idx;
+            pVis5Idx = pv5Idx;
             break;
           }
         }
@@ -633,14 +649,23 @@ export async function processMonthlyFile(files: File | File[], manualStartDate?:
           let siteName = DEFAULT_SITE;
           let team = '-';
 
+          const projVals = [
+                projectIdx !== -1 ? String(row[projectIdx]).toLowerCase() : '',
+                pVis1Idx !== -1 ? String(row[pVis1Idx]).toLowerCase() : '',
+                pVis2Idx !== -1 ? String(row[pVis2Idx]).toLowerCase() : '',
+                pVis3Idx !== -1 ? String(row[pVis3Idx]).toLowerCase() : '',
+                pVis4Idx !== -1 ? String(row[pVis4Idx]).toLowerCase() : '',
+                pVis5Idx !== -1 ? String(row[pVis5Idx]).toLowerCase() : '',
+          ];
+          const combinedProj = projVals.join(' ');
+
           // Special logic for specific users: Manisha Singh, Smita Kad, Sejal Satav, Deepak Keshri
           const specificUsers = ["manisha singh", "smita kad", "sejal satav", "deepak keshri"];
           const isSpecificUser = specificUsers.some(u => assignedLower.includes(u));
 
           if (isSpecificUser) {
              // Look into 'Project' column for keywords
-             const rawProject = projectIdx !== -1 ? row[projectIdx] : '';
-             const projectVal = String(rawProject).toLowerCase().trim();
+             const projectVal = combinedProj;
              
              if (projectVal.includes('kairos')) siteName = 'Kairos';
              else if (projectVal.includes('aqua') || projectVal.includes('aqualife')) siteName = 'Aqua Life';
@@ -661,6 +686,10 @@ export async function processMonthlyFile(files: File | File[], manualStartDate?:
               
               if (matchedUserKey) {
                 siteName = normalizedMapping[matchedUserKey];
+              }
+
+              if (combinedProj.includes('ekam')) {
+                  siteName = 'Legacy Ekam';
               }
 
               // Always try to find team using assignedLower, or mapped user key
