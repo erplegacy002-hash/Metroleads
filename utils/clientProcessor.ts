@@ -16,6 +16,13 @@ import { USER_PROJECT_MAPPING } from './projectMapping';
 /**
  * Handles durations from Excel "Editing Mode" (raw values).
  */
+
+function getCellValue(cell: any): string {
+  if (cell === null || cell === undefined) return '';
+  if (typeof cell === 'object' && cell.v !== undefined) return String(cell.v);
+  return String(cell);
+}
+
 function parseDurationRaw(val: any): number {
   if (val === null || val === undefined) return 0;
   
@@ -208,6 +215,20 @@ export async function processFile(file: File): Promise<ProcessResponse> {
         const rawRows = utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
         
         if (!rawRows || rawRows.length === 0) throw new Error("Excel file is empty.");
+        for(let R = 0; R < rawRows.length; R++) {
+            const row = rawRows[R];
+            if (!row || !Array.isArray(row)) continue;
+            const range = utils.decode_range(sheet['!ref'] || 'A1');
+            const maxC = Math.max(row.length, range.e.c + 1);
+            for(let C = 0; C < maxC; C++) {
+                 const cell_ref = utils.encode_cell({ c: C, r: R });
+                 const originalCell = sheet[cell_ref];
+                 if (originalCell && originalCell.l && originalCell.l.Target) {
+                     row[C] = { v: row[C] !== null ? row[C] : '', t: originalCell.t || 's', l: originalCell.l };
+                 }
+            }
+        }
+
 
         // Detect Columns
         let headerIndex = -1;

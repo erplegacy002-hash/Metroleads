@@ -6,14 +6,20 @@ import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './project
 
 // --- Helpers ---
 
+function getCellValue(cell: any): string {
+  if (cell === null || cell === undefined) return '';
+  if (typeof cell === 'object' && cell.v !== undefined) return String(cell.v);
+  return String(cell);
+}
+
 function determineSource(cpData: any, sourceData: any, subSourceData: any, pageNameData: any): string {
   // 1. If CP Firm Name exists and is not empty/hyphen, it is a Channel Partner
-  if (cpData && String(cpData).trim().length > 0 && String(cpData).trim() !== '-') {
+  if (cpData && getCellValue(cpData).trim().length > 0 && getCellValue(cpData).trim() !== '-') {
     return 'Channel Partner';
   }
 
-  const rawSource = sourceData ? String(sourceData).trim() : '';
-  const rawSubSource = subSourceData ? String(subSourceData).trim() : '';
+  const rawSource = sourceData ? getCellValue(sourceData).trim() : '';
+  const rawSubSource = subSourceData ? getCellValue(subSourceData).trim() : '';
   const rawPageName = pageNameData ? String(pageNameData).trim() : '';
 
   const checkKeywords = (str: string): string | null => {
@@ -132,7 +138,7 @@ async function generatePresalesLeadsImage(
 
 function findColumnIndex(row: any[], aliases: string[]): number {
   for (const alias of aliases) {
-    const idx = row.findIndex(c => c && String(c).toLowerCase().trim() === alias);
+    const idx = row.findIndex(c => c && (getCellValue(c).toLowerCase().trim() === alias));
     if (idx !== -1) return idx;
   }
   return -1;
@@ -149,6 +155,20 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
         const rawRows = utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
 
         if (!rawRows || rawRows.length === 0) throw new Error("Excel file is empty.");
+        for(let R = 0; R < rawRows.length; R++) {
+            const row = rawRows[R];
+            if (!row || !Array.isArray(row)) continue;
+            const range = utils.decode_range(sheet['!ref'] || 'A1');
+            const maxC = Math.max(row.length, range.e.c + 1);
+            for(let C = 0; C < maxC; C++) {
+                 const cell_ref = utils.encode_cell({ c: C, r: R });
+                 const originalCell = sheet[cell_ref];
+                 if (originalCell && originalCell.l && originalCell.l.Target) {
+                     row[C] = { v: row[C] !== null ? row[C] : '', t: originalCell.t || 's', l: originalCell.l };
+                 }
+            }
+        }
+
 
         // Detect Columns
         let headerIndex = -1;
@@ -216,8 +236,8 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
           }
 
           // Extract other fields
-          const leadState = leadStateIdx !== -1 && row[leadStateIdx] ? String(row[leadStateIdx]).trim() : '-';
-          const pageName = pageNameIdx !== -1 && row[pageNameIdx] ? String(row[pageNameIdx]).trim() : '-';
+          const leadState = leadStateIdx !== -1 && row[leadStateIdx] ? getCellValue(row[leadStateIdx]).trim() : '-';
+          const pageName = pageNameIdx !== -1 && row[pageNameIdx] ? getCellValue(row[pageNameIdx]).trim() : '-';
           
           // Determine Source using Keyword Logic
           const leadSourceData = leadSourceIdx !== -1 ? row[leadSourceIdx] : null;

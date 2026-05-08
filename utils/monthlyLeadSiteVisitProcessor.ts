@@ -7,7 +7,14 @@ import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './project
 
 // --- Helpers ---
 
+function getCellValue(cell: any): string {
+  if (cell === null || cell === undefined) return '';
+  if (typeof cell === 'object' && cell.v !== undefined) return String(cell.v);
+  return String(cell);
+}
+
 function parseDate(val: any): Date | null {
+  if (typeof val === 'object' && val !== null && !(val instanceof Date) && val.v !== undefined) val = val.v;
   if (!val) return null;
   let date: Date | undefined;
 
@@ -67,13 +74,13 @@ function formatDate(date: Date): string {
 
 function determineSource(cpData: any, sourceData: any, subSourceData: any): string {
   // 1. If CP Firm Name exists and is not '-', it is a Channel Partner
-  const cpFirm = cpData ? String(cpData).trim() : '';
+  const cpFirm = cpData ? getCellValue(cpData).trim() : '';
   if (cpFirm.length > 0 && cpFirm !== '-') {
     return 'Channel Partner';
   }
 
-  const rawSource = sourceData ? String(sourceData).trim() : '';
-  const rawSubSource = subSourceData ? String(subSourceData).trim() : '';
+  const rawSource = sourceData ? getCellValue(sourceData).trim() : '';
+  const rawSubSource = subSourceData ? getCellValue(subSourceData).trim() : '';
 
   const checkKeywords = (str: string): string | null => {
     const s = str.toLowerCase();
@@ -227,7 +234,7 @@ interface TeamCounts {
 
 function findColumnIndex(row: any[], aliases: string[]): number {
   for (const alias of aliases) {
-    const idx = row.findIndex(c => c && String(c).toLowerCase().trim() === alias);
+    const idx = row.findIndex(c => c && (getCellValue(c).toLowerCase().trim() === alias));
     if (idx !== -1) return idx;
   }
   return -1;
@@ -244,6 +251,20 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
         const rawRows = utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
 
         if (!rawRows || rawRows.length === 0) throw new Error("Excel file is empty.");
+        for(let R = 0; R < rawRows.length; R++) {
+            const row = rawRows[R];
+            if (!row || !Array.isArray(row)) continue;
+            const range = utils.decode_range(sheet['!ref'] || 'A1');
+            const maxC = Math.max(row.length, range.e.c + 1);
+            for(let C = 0; C < maxC; C++) {
+                 const cell_ref = utils.encode_cell({ c: C, r: R });
+                 const originalCell = sheet[cell_ref];
+                 if (originalCell && originalCell.l && originalCell.l.Target) {
+                     row[C] = { v: row[C] !== null ? row[C] : '', t: originalCell.t || 's', l: originalCell.l };
+                 }
+            }
+        }
+
 
         // Detect Columns
         let headerIndex = -1;
@@ -362,12 +383,12 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
           let team = '-';
 
           const projVals = [
-                projectIdx !== -1 ? String(row[projectIdx]).toLowerCase() : '',
-                pVis1Idx !== -1 ? String(row[pVis1Idx]).toLowerCase() : '',
-                pVis2Idx !== -1 ? String(row[pVis2Idx]).toLowerCase() : '',
-                pVis3Idx !== -1 ? String(row[pVis3Idx]).toLowerCase() : '',
-                pVis4Idx !== -1 ? String(row[pVis4Idx]).toLowerCase() : '',
-                pVis5Idx !== -1 ? String(row[pVis5Idx]).toLowerCase() : '',
+                projectIdx !== -1 ? getCellValue(row[projectIdx]).toLowerCase() : '',
+                pVis1Idx !== -1 ? getCellValue(row[pVis1Idx]).toLowerCase() : '',
+                pVis2Idx !== -1 ? getCellValue(row[pVis2Idx]).toLowerCase() : '',
+                pVis3Idx !== -1 ? getCellValue(row[pVis3Idx]).toLowerCase() : '',
+                pVis4Idx !== -1 ? getCellValue(row[pVis4Idx]).toLowerCase() : '',
+                pVis5Idx !== -1 ? getCellValue(row[pVis5Idx]).toLowerCase() : '',
           ];
           const combinedProj = projVals.join(' ');
 
@@ -413,12 +434,12 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
               }
           }
 
-          const name = row[nameIdx] ? String(row[nameIdx]).trim() : '-';
+          const name = row[nameIdx] ? getCellValue(row[nameIdx]).trim() : '-';
           const nameLower = name.toLowerCase();
           // Filter if name contains 'test'
           if (nameLower.includes('test')) continue;
 
-          let state = (stateIdx !== -1 && row[stateIdx]) ? String(row[stateIdx]).trim() : '-';
+          let state = (stateIdx !== -1 && row[stateIdx]) ? getCellValue(row[stateIdx]).trim() : '-';
           if (state.toLowerCase() === 're_visit_done') state = 'Revisit Done';
           
            // --- Date Logic ---
@@ -456,7 +477,7 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
           const subSourceData = subSourceIdx !== -1 ? row[subSourceIdx] : null;
 
           const source = determineSource(cpData, leadSourceData, subSourceData);
-          const cpFirmName = cpData ? String(cpData).trim() : '-';
+          const cpFirmName = cpData ? getCellValue(cpData).trim() : '-';
 
           // Deduplication Check
           const uniqueKey = `${siteName}|${name}|${d1 ? d1.getTime() : 'no_date'}`;
