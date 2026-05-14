@@ -399,6 +399,7 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
         const rawRows = utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
 
         if (!rawRows || rawRows.length === 0) throw new Error("Excel file is empty.");
+
         for(let R = 0; R < rawRows.length; R++) {
             const row = rawRows[R];
             if (!row || !Array.isArray(row)) continue;
@@ -408,11 +409,14 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
                  const cell_ref = utils.encode_cell({ c: C, r: R });
                  const originalCell = sheet[cell_ref];
                  if (originalCell && originalCell.l && originalCell.l.Target) {
-                     row[C] = { v: row[C] !== null ? row[C] : '', t: originalCell.t || 's', l: originalCell.l };
+                     let val = row[C];
+                     if (val === undefined || val === null) {
+                         val = originalCell.v !== undefined ? originalCell.v : (originalCell.w !== undefined ? originalCell.w : '');
+                     }
+                     row[C] = { v: val, t: originalCell.t || 's', l: originalCell.l };
                  }
             }
         }
-
 
         // Detect Columns
         let headerIndex = -1;
@@ -545,8 +549,8 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
           ];
           const combinedProj = projVals.join(' ');
 
-          // Special logic for specific users: Manisha Singh, Smita Kad, Sejal Satav, Deepak Keshri
-          const specificUsers = ["manisha singh", "smita kad", "sejal satav", "deepak keshri"];
+          // Special logic for specific users: Manisha Singh, Smita Kad, Sejal Satav
+          const specificUsers = ["manisha singh", "smita kad", "sejal satav"];
           const isSpecificUser = specificUsers.some(u => assignedLower.includes(u));
 
           if (isSpecificUser) {
