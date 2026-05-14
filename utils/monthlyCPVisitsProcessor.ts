@@ -354,12 +354,25 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
             for(let C = 0; C < maxC; C++) {
                  const cell_ref = utils.encode_cell({ c: C, r: R });
                  const originalCell = sheet[cell_ref];
-                 if (originalCell && originalCell.l && originalCell.l.Target) {
+                 if (originalCell) {
                      let val = row[C];
                      if (val === undefined || val === null) {
                          val = originalCell.v !== undefined ? originalCell.v : (originalCell.w !== undefined ? originalCell.w : '');
                      }
-                     row[C] = { v: val, t: originalCell.t || 's', l: originalCell.l };
+                     
+                     // If cell has a formula, and specifically a HYPERLINK, extract the text display value
+                     if (originalCell.f && String(originalCell.f).toUpperCase().includes('HYPERLINK')) {
+                         const m = String(originalCell.f).match(/HYPERLINK\([^,]+,\s*\"?([^\"\)]+)\"?\)/i);
+                         if (m) {
+                             val = m[1];
+                         }
+                     }
+                     
+                     if (originalCell.l && originalCell.l.Target) {
+                         row[C] = { v: val, t: originalCell.t || 's', l: originalCell.l };
+                     } else {
+                         row[C] = val;
+                     }
                  }
             }
         }
