@@ -416,17 +416,13 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
                      
                      // If cell has a formula, and specifically a HYPERLINK, extract the text display value
                      if (originalCell.f && String(originalCell.f).toUpperCase().includes('HYPERLINK')) {
-                         const m = String(originalCell.f).match(/HYPERLINK\([^,]+,\s*\"?([^\"\)]+)\"?\)/i);
+                         const m = String(originalCell.f).match(/.+,\s*\"?([^\"\)]+)\"?\s*\)/i);
                          if (m) {
                              val = m[1];
                          }
                      }
                      
-                     if (originalCell.l && originalCell.l.Target) {
-                         row[C] = { v: val, t: originalCell.t || 's', l: originalCell.l };
-                     } else {
-                         row[C] = val;
-                     }
+                     row[C] = val;
                  }
             }
         }

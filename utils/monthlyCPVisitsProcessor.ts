@@ -362,24 +362,20 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
                      
                      // If cell has a formula, and specifically a HYPERLINK, extract the text display value
                      if (originalCell.f && String(originalCell.f).toUpperCase().includes('HYPERLINK')) {
-                         const m = String(originalCell.f).match(/HYPERLINK\([^,]+,\s*\"?([^\"\)]+)\"?\)/i);
+                         const m = String(originalCell.f).match(/.+,\s*\"?([^\"\)]+)\"?\s*\)/i);
                          if (m) {
                              val = m[1];
                          }
                      }
                      
-                     if (originalCell.l && originalCell.l.Target) {
-                         row[C] = { v: val, t: originalCell.t || 's', l: originalCell.l };
-                     } else {
-                         row[C] = val;
-                     }
+                     row[C] = val;
                  }
             }
         }
 
         // Detect Columns
         let headerIndex = -1;
-        let nameIdx = -1, stateIdx = -1, assignedToIdx = -1;
+        let nameIdx = -1, stateIdx = -1, assignedToIdx = -1, leadIdIdx = -1;
         let visitDateIdx = -1, visitDate2Idx = -1, visitDate3Idx = -1, visitDate4Idx = -1, visitDate5Idx = -1;
         let cpFirmNameIdx = -1, leadSourceIdx = -1, subSourceIdx = -1;
         let projectIdx = -1;
@@ -388,6 +384,7 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
         const nameAliases = ['name', 'visitor name', 'lead name', 'customer name', 'full name', 'client name'];
         const stateAliases = ['lead state', 'state', 'region', 'location'];
         const assignedAliases = ['assigned to', 'assigned_to', 'owner', 'agent', 'executive', 'sales executive', 'allocated to', 'sales person', 'sourcing manager', 'closing manager'];
+        const leadIdAliases = ['lead id', 'lead_id', 'id'];
         
         const dateAliases = ['visit date', 'visit_date', 'date of visit', 'date', 'visited date', 'created time', 'created on', 'entry date'];
         const date2Aliases = ['revisit date 1', 'revisit_date_1', 're-visit date 1', '2nd visit date', 'second visit date', 'visit date 2', '2nd_visit_date'];
@@ -413,6 +410,7 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
           const nIdx = findColumnIndex(row, nameAliases);
           const sIdx = findColumnIndex(row, stateAliases);
           const aIdx = findColumnIndex(row, assignedAliases);
+          const lIdIdx = findColumnIndex(row, leadIdAliases);
           
           const dIdx = findColumnIndex(row, dateAliases);
           const d2Idx = findColumnIndex(row, date2Aliases);
@@ -436,6 +434,7 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
             nameIdx = nIdx;
             stateIdx = sIdx;
             assignedToIdx = aIdx;
+            leadIdIdx = lIdIdx;
             visitDateIdx = dIdx;
             visitDate2Idx = d2Idx;
             visitDate3Idx = d3Idx;
@@ -541,6 +540,8 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
           // Filter if name contains 'test'
           if (nameLower.includes('test')) continue;
 
+          const leadId = leadIdIdx !== -1 && row[leadIdIdx] ? getCellValue(row[leadIdIdx]).trim() : '';
+
           let state = (stateIdx !== -1 && row[stateIdx]) ? getCellValue(row[stateIdx]).trim() : '-';
           if (state.toLowerCase() === 're_visit_done') state = 'Revisit Done';
           
@@ -578,7 +579,8 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
 
           if (source !== 'Channel Partner') continue;
           // Deduplication Check
-          const uniqueKey = `${siteName}|${name}|${d1 ? d1.getTime() : 'no_date'}`;
+          const dateKey = d1 ? d1.getTime() : 'no_date';
+          const uniqueKey = leadId ? `${siteName}|${leadId}` : `${siteName}|${name}|${dateKey}`;
           if (seenRecords.has(uniqueKey)) continue;
           seenRecords.add(uniqueKey);
 

@@ -44,7 +44,7 @@ const App: React.FC = () => {
       if (activeTab === 'Monthly Site Visit Report') {
         data = await processMonthlyFile(file!, startDate, endDate, selectedSource);
       } else if (activeTab === 'Monthly CP Visits Report') {
-        data = await processMonthlyCPVisitsFile(file!, startDate, endDate, selectedSource);
+        data = await processMonthlyCPVisitsFile(files.length > 0 ? files : (file ? [file] : []), startDate, endDate, selectedSource);
       } else if (activeTab === 'User Wise Site Visit Report') {
         data = await processMonthlyFile(files, startDate, endDate, selectedSource, true);
       } else if (activeTab === 'Monthly (Lead + Site Visit) Report') {
@@ -268,7 +268,7 @@ const App: React.FC = () => {
               selectedFile={file} 
               onFilesSelect={setFiles}
               selectedFiles={files}
-              multiple={activeTab === 'User Wise Site Visit Report'}
+              multiple={activeTab === 'User Wise Site Visit Report' || activeTab === 'Monthly CP Visits Report'}
               disabled={isLoading} 
             />
 
