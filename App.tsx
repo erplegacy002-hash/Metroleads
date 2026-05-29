@@ -27,8 +27,8 @@ const App: React.FC = () => {
   const sourceOptions = ['All', 'Digital', 'Channel Partner', 'Referral', 'Offer', 'Walk-In', 'Hoarding', 'Revisit'];
 
   const handleProcess = async () => {
-    const isUserWise = activeTab === 'User Wise Site Visit Report';
-    if (isUserWise) {
+    const isMultipleFilesTab = ['User Wise Site Visit Report', 'Monthly CP Visits Report'].includes(activeTab);
+    if (isMultipleFilesTab) {
       if (files.length === 0) return;
     } else {
       if (!file) return;
@@ -74,6 +74,7 @@ const App: React.FC = () => {
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId);
     setFile(null);
+    setFiles([]);
     setResult(null);
     setError(null);
     setSelectedSource('All');
@@ -283,10 +284,10 @@ const App: React.FC = () => {
 
               <button
                 onClick={handleProcess}
-                disabled={(activeTab === 'User Wise Site Visit Report' ? files.length === 0 : !file) || isLoading}
+                disabled={((['User Wise Site Visit Report', 'Monthly CP Visits Report'].includes(activeTab)) ? files.length === 0 : !file) || isLoading}
                 className={`
                   flex items-center space-x-3 px-10 py-4 rounded-none font-bold text-lg tracking-wider shadow-md transition-all border
-                  ${((activeTab === 'User Wise Site Visit Report' ? files.length === 0 : !file) || isLoading)
+                  ${((['User Wise Site Visit Report', 'Monthly CP Visits Report'].includes(activeTab)) ? files.length === 0 : !file) || isLoading
                     ? 'bg-slate-300 text-slate-500 border-slate-300 cursor-not-allowed' 
                     : 'bg-[#1a1a1a] text-[#d4af37] border-[#d4af37] hover:bg-black hover:shadow-xl hover:scale-105'}
                 `}

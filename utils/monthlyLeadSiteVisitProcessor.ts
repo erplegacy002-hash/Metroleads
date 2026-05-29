@@ -465,12 +465,15 @@ export async function processMonthlyLeadSiteVisitFile(file: File, manualStartDat
           let selectedDate: Date | null = null;
           const datesToCheck = [d1, d2, d3, d4, d5].filter(d => d !== null) as Date[];
 
-          if (startFilter && endFilter) {
-              const datesInRange = datesToCheck.filter(d => d >= startFilter && d <= endFilter);
+          if (startFilter || endFilter) {
+              const datesToCheck = [d1, d2, d3, d4, d5].filter(d => d !== null) as Date[];
+              const datesInRange = datesToCheck.filter(d => {
+                  if (startFilter && d < startFilter) return false;
+                  if (endFilter && d > endFilter) return false;
+                  return true;
+              });
               
-              // If dates exist but NONE are in range, skip.
-              // If NO dates exist, keep the record (count as Lead without Visit).
-              if (datesToCheck.length > 0 && datesInRange.length === 0) {
+              if (datesInRange.length === 0) {
                  continue; 
               }
               

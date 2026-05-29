@@ -165,6 +165,7 @@ export async function processProjectWiseSourceFile(
     let nameIdx = -1, phoneIdx = -1, projectIdx = -1, assignedToIdx = -1;
     let sourceIdx = -1, subSourceIdx = -1, subSubSourceIdx = -1, additionalSourceIdx = -1;
     let adminRemarkIdx = -1;
+    let dateIdx = -1;
 
     for (let i = 0; i < Math.min(20, rawData.length); i++) {
         const row = rawData[i];
@@ -180,6 +181,7 @@ export async function processProjectWiseSourceFile(
         subSubSourceIdx = findColumnIndex(row, ['sub sub source']);
         additionalSourceIdx = findColumnIndex(row, ['additional source', 'additional source (info)']);
         adminRemarkIdx = findColumnIndex(row, ['admin remark', 'admin remarks', 'remark', 'admin comment']);
+        dateIdx = findColumnIndex(row, ['created on', 'created time', 'date', 'visit date', 'lead date']);
         
         if (assignedToIdx !== -1) {
             headerIndex = i;

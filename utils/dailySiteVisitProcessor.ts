@@ -617,10 +617,13 @@ export async function processDailySiteVisitFile(file: File, manualStartDate?: st
           let selectedDate: Date | null = null;
 
           // 2. Filter logic
-          if (startFilter && endFilter) {
+          if (startFilter || endFilter) {
               const datesToCheck = [d1, d2, d3, d4, d5].filter(d => d !== null) as Date[];
-              // Keep dates within range
-              const datesInRange = datesToCheck.filter(d => d >= startFilter && d <= endFilter);
+              const datesInRange = datesToCheck.filter(d => {
+                  if (startFilter && d < startFilter) return false;
+                  if (endFilter && d > endFilter) return false;
+                  return true;
+              });
               
               if (datesInRange.length === 0) {
                   // No dates in range, skip this record entirely

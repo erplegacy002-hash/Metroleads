@@ -632,9 +632,13 @@ export async function processWeeklySiteVisitFile(file: File, manualStartDate?: s
 
           let selectedDate: Date | null = null;
 
-          if (startFilter && endFilter) {
+          if (startFilter || endFilter) {
               const datesToCheck = [d1, d2, d3, d4, d5].filter(d => d !== null) as Date[];
-              const datesInRange = datesToCheck.filter(d => d >= startFilter && d <= endFilter);
+              const datesInRange = datesToCheck.filter(d => {
+                  if (startFilter && d < startFilter) return false;
+                  if (endFilter && d > endFilter) return false;
+                  return true;
+              });
               
               if (datesInRange.length === 0) continue; 
               
