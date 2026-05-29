@@ -81,7 +81,9 @@ function formatDate(date: Date): string {
 
 function determineSource(cpData: any, sourceData: any, subSourceData: any): string {
   const cpFirm = cpData ? getCellValue(cpData).trim() : '';
-  if (cpFirm.length > 0 && cpFirm !== '-') {
+  const cpFirmLower = cpFirm.toLowerCase();
+  
+  if (cpFirm.length > 0 && cpFirm !== '-' && cpFirmLower !== 'na' && cpFirmLower !== 'not specified') {
     return 'Channel Partner';
   }
 
@@ -224,7 +226,7 @@ interface TeamCounts {
   salesGre: number;
 }
 
-async function generateMonthlySummaryImage(
+async function generateMonthlySummaryPDF(
   siteName: string, 
   rows: any[], 
   cpStats: Record<string, number>, 
@@ -232,74 +234,100 @@ async function generateMonthlySummaryImage(
   startDate: string, 
   endDate: string
 ): Promise<string> {
-  const container = document.createElement('div');
-  Object.assign(container.style, {
-    position: 'fixed',
-    top: '0',
-    left: '0',
-    width: '500px', 
-    backgroundColor: '#ffffff', 
-    padding: '15px', 
-    fontFamily: "'Calibri', sans-serif",
-    color: '#000000', 
-    zIndex: '-9999',
-    pointerEvents: 'none'
-  });
+  const doc = new jsPDF({ orientation: 'portrait' });
+
+  // Header
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("SUMMARY REPORT", 105, 15, { align: "center" });
+  
+  doc.setLineWidth(0.5);
+  doc.line(85, 17, 125, 17); // Underline
+
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text(siteName.toUpperCase(), 105, 25, { align: "center" });
+
+  doc.setLineWidth(0.5);
+  doc.line(85, 27, 125, 27); // Underline
+
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text(reportTitle, 105, 33, { align: "center" });
+
+  // Date Range
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Start Date: ${startDate}`, 14, 40);
+  doc.text(`End Date: ${endDate}`, 196, 40, { align: "right" });
 
   const validCpKeys = Object.keys(cpStats).sort((a,b) => cpStats[b] - cpStats[a]);
   const totalCpVisits = validCpKeys.reduce((acc, k) => acc + cpStats[k], 0);
 
-  const cpRowsHtml = validCpKeys.map(cp => {
-    return `
-    <tr>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: left; color: #000000;">${cp}</td>
-      <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: center; font-weight: 700; color: #000000;">${cpStats[cp]}</td>
-    </tr>`;
-  }).join('');
+  const tableBody = validCpKeys.map((cp, index) => [
+    index + 1,
+    cp,
+    cpStats[cp]
+  ]);
 
-  container.innerHTML = `
-    <div style="background-color: #ffffff; width: 100%; border: 1px solid #000000; box-sizing: border-box;">
-      <div style="padding: 12px 15px; background-color: #ffffff; text-align: center;">
-        <div style="font-size: 16px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">SUMMARY REPORT</div>
-        <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 18px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; text-transform: uppercase;">${siteName}</div>
-        <div style="width: 100px; height: 1px; background-color: #000000; margin: 6px auto;"></div>
-        <div style="font-size: 14px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000;">${reportTitle}</div>
-      </div>
+  // Add highly visible Total row
+  tableBody.push([
+    '',
+    'Total',
+    totalCpVisits
+  ]);
 
-      <div style="padding: 5px 2px; display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; padding-left: 15px; padding-right: 15px;">
-        <span>Start Date: ${startDate}</span>
-        <span>End Date: ${endDate}</span>
-      </div>
+  autoTable(doc, {
+    startY: 45,
+    head: [['Sr. No.', 'CP Firm Name', 'Visit Count']],
+    body: tableBody,
+    theme: 'grid',
+    styles: { 
+      fontSize: 10, 
+      cellPadding: 3,
+      lineColor: [0, 0, 0],
+      lineWidth: 0.1,
+      textColor: [0, 0, 0]
+    },
+    headStyles: {
+      fillColor: [243, 244, 246],
+      textColor: [0, 0, 0],
+      fontStyle: 'bold',
+      halign: 'center'
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 20 },
+      1: { halign: 'left', cellWidth: 'auto' },
+      2: { halign: 'center', cellWidth: 30 }
+    },
+    willDrawCell: function(data) {
+      // Bold the last row (Total)
+      if (data.row.index === tableBody.length - 1) {
+        doc.setFont("helvetica", "bold");
+      }
+    },
+    didDrawPage: function (data) {
+      if (data.pageNumber === 1 && doc.internal.getNumberOfPages() === 1) {
+         // optional branding
+      }
+      const pageSize = doc.internal.pageSize;
+      const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+      
+      const logoText = "Realty Studio";
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(150, 150, 150);
+      const textWidth = doc.getTextWidth(logoText);
+      doc.text(logoText, (pageSize.width - textWidth) / 2, pageHeight - 10);
+      
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Page ${data.pageNumber}`, 196, pageHeight - 10, { align: "right" });
+    }
+  });
 
-      <div style="padding: 0 15px 15px 15px; margin-top: 20px;">
-        <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
-          <thead>
-            <tr>
-              <th style="padding: 8px 12px; text-align: left; border: 1px solid #000000; font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">CP Firm Name</th>
-              <th style="padding: 8px 12px; text-align: center; border: 1px solid #000000; font-size: 14px; font-weight: 900; font-family: 'Arial', sans-serif; color: #000000; background-color: #f3f4f6;">Visit Count</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${cpRowsHtml}
-            <tr>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: right; font-weight: 700; font-family: 'Arial', sans-serif; color: #000000; background-color: #f9fafb;">Total</td>
-               <td style="padding: 8px 12px; border: 1px solid #000000; font-size: 14px; text-align: center; font-weight: 700; color: #000000; background-color: #f9fafb;">${totalCpVisits}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(container);
-  await new Promise(resolve => setTimeout(resolve, 600));
-
-  try {
-    return await toPng(container, { quality: 0.95, pixelRatio: 2 });
-  } finally {
-    if (document.body.contains(container)) document.body.removeChild(container);
-  }
+  return doc.output('datauristring');
 }
 
 function findColumnIndex(row: any[], aliases: string[]): number {
@@ -579,9 +607,11 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
           const subSourceData = subSourceIdx !== -1 ? row[subSourceIdx] : null;
 
           const source = determineSource(cpData, leadSourceData, subSourceData);
-          const cpFirmName = cpData ? getCellValue(cpData).trim() : '-';
+          let cpFirmName = cpData ? getCellValue(cpData).trim() : '-';
 
           if (source !== 'Channel Partner') continue;
+          if (cpFirmName === '-' || cpFirmName === '' || cpFirmName.toLowerCase() === 'na' || cpFirmName.toLowerCase() === 'not specified') continue;
+
           // Deduplication Check
           const dateKey = d1 ? d1.getTime() : 'no_date';
           const uniqueKey = leadId ? `${siteName}|${leadId}` : `${siteName}|${name}|${dateKey}`;
@@ -670,9 +700,11 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
           const cpStats: Record<string, number> = {};
 
           rows.forEach(r => {
-    const name = (r.cpFirmName && r.cpFirmName !== '-') ? r.cpFirmName : 'Not Specified';
-cpStats[name] = (cpStats[name] || 0) + 1;
-});
+            const name = r.cpFirmName;
+            if (name) {
+              cpStats[name] = (cpStats[name] || 0) + 1;
+            }
+          });
 
           // Generate List as PDF
           const pdfDataUrl = await generateMonthlyListImage(site, rows, dateLabel, finalStartDateStr, finalEndDateStr);
@@ -692,9 +724,9 @@ cpStats[name] = (cpStats[name] || 0) + 1;
           const excelFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_raw.xlsx`;
           zip.file(excelFilename, excelBuffer);
 
-          // Summary remains PNG
-          const summaryDataUrl = await generateMonthlySummaryImage(site, rows, cpStats, dateLabel, finalStartDateStr, finalEndDateStr);
-          const summaryFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${isUserWise ? 'user_wise' : 'monthly'}_summary.png`;
+          // Generate Summary as PDF instead of PNG
+          const summaryDataUrl = await generateMonthlySummaryPDF(site, rows, cpStats, dateLabel, finalStartDateStr, finalEndDateStr);
+          const summaryFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${isUserWise ? 'user_wise' : 'monthly'}_summary.pdf`;
           images.push({ project_name: `Summary - ${site}`, image_url: summaryDataUrl, filename: summaryFilename });
           zip.file(summaryFilename, summaryDataUrl.split(',')[1], { base64: true });
         }
