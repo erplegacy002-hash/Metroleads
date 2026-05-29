@@ -169,8 +169,8 @@ async function generateMonthlyListImage(siteName: string, rows: any[], reportTit
     body: tableBody,
     theme: 'grid',
     styles: { 
-      fontSize: 8, 
-      cellPadding: 2,
+      fontSize: 7, 
+      cellPadding: 0.5,
       lineColor: [0, 0, 0],
       lineWidth: 0.1,
       textColor: [0, 0, 0]
@@ -196,7 +196,7 @@ async function generateMonthlyListImage(siteName: string, rows: any[], reportTit
       9: { halign: 'center' }, // Date 5
       10: { halign: 'center' } // State
     },
-    margin: { bottom: 40, top: 45 }, // Increased bottom margin
+    margin: { bottom: 15, top: 40 }, // Reduced bottom margin
     didDrawPage: (data) => {
         // Header on subsequent pages
         if (data.pageNumber > 1) {
@@ -205,14 +205,14 @@ async function generateMonthlyListImage(siteName: string, rows: any[], reportTit
              doc.text(`${siteName} - Site Visit Report`, 14, 25);
              doc.setFontSize(8);
              doc.setFont("helvetica", "normal");
-             doc.text(`Start: ${startDate} | End: ${endDate}`, 14, 35);
+             doc.text(`Start: ${startDate} | End: ${endDate}`, 14, 32);
         }
 
         // Footer with page number
         const pageSize = doc.internal.pageSize;
         const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
         doc.setFontSize(8);
-        doc.text('Page ' + String(data.pageNumber), data.settings.margin.left, pageHeight - 15);
+        doc.text('Page ' + String(data.pageNumber), data.settings.margin.left, pageHeight - 8);
     }
   });
 
@@ -226,64 +226,80 @@ interface TeamCounts {
   salesGre: number;
 }
 
-async function generateMonthlySummaryPDF(
-  siteName: string, 
-  rows: any[], 
-  cpStats: Record<string, number>, 
+async function generateOverallMonthlySummaryPDF(
+  cpStats: Record<string, Record<string, number>>, 
+  allSites: string[],
   reportTitle: string, 
   startDate: string, 
   endDate: string
 ): Promise<string> {
-  const doc = new jsPDF({ orientation: 'portrait' });
+  const doc = new jsPDF({ orientation: 'landscape' });
 
   // Header
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("SUMMARY REPORT", 105, 15, { align: "center" });
+  doc.text("OVERALL SUMMARY REPORT", 148, 15, { align: "center" });
   
   doc.setLineWidth(0.5);
-  doc.line(85, 17, 125, 17); // Underline
-
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.text(siteName.toUpperCase(), 105, 25, { align: "center" });
-
-  doc.setLineWidth(0.5);
-  doc.line(85, 27, 125, 27); // Underline
+  doc.line(115, 17, 181, 17); // Underline
 
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.text(reportTitle, 105, 33, { align: "center" });
+  doc.text(reportTitle, 148, 25, { align: "center" });
 
   // Date Range
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.text(`Start Date: ${startDate}`, 14, 40);
-  doc.text(`End Date: ${endDate}`, 196, 40, { align: "right" });
+  doc.text(`Start Date: ${startDate}`, 14, 32);
+  doc.text(`End Date: ${endDate}`, 282, 32, { align: "right" });
 
-  const validCpKeys = Object.keys(cpStats).sort((a,b) => cpStats[b] - cpStats[a]);
-  const totalCpVisits = validCpKeys.reduce((acc, k) => acc + cpStats[k], 0);
+  // Sort CPs by overall total
+  const cpTotals: Record<string, number> = {};
+  const siteTotals: Record<string, number> = {};
+  allSites.forEach(s => siteTotals[s] = 0);
+  let grandTotal = 0;
 
-  const tableBody = validCpKeys.map((cp, index) => [
-    index + 1,
-    cp,
-    cpStats[cp]
-  ]);
+  Object.keys(cpStats).forEach(cp => {
+    let total = 0;
+    allSites.forEach(site => {
+      total += (cpStats[cp][site] || 0);
+    });
+    cpTotals[cp] = total;
+  });
+
+  const validCpKeys = Object.keys(cpStats).sort((a,b) => cpTotals[b] - cpTotals[a]);
+
+  const headRow = ['Sr. No.', 'CP Firm Name', ...allSites, 'Total'];
+
+  const tableBody = validCpKeys.map((cp, index) => {
+    const rowContent: (string | number)[] = [index + 1, cp];
+    let rowTotal = 0;
+    allSites.forEach(site => {
+      const val = cpStats[cp][site] || 0;
+      rowContent.push(val);
+      siteTotals[site] += val;
+      rowTotal += val;
+    });
+    rowContent.push(rowTotal);
+    grandTotal += rowTotal;
+    return rowContent;
+  });
 
   // Add highly visible Total row
-  tableBody.push([
-    '',
-    'Total',
-    totalCpVisits
-  ]);
+  const totalRow: (string | number)[] = ['', 'Total'];
+  allSites.forEach(site => {
+    totalRow.push(siteTotals[site]);
+  });
+  totalRow.push(grandTotal);
+  tableBody.push(totalRow);
 
   autoTable(doc, {
-    startY: 45,
-    head: [['Sr. No.', 'CP Firm Name', 'Visit Count']],
+    startY: 37,
+    head: [headRow],
     body: tableBody,
     theme: 'grid',
     styles: { 
-      fontSize: 10, 
+      fontSize: 8, 
       cellPadding: 3,
       lineColor: [0, 0, 0],
       lineWidth: 0.1,
@@ -296,20 +312,24 @@ async function generateMonthlySummaryPDF(
       halign: 'center'
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 20 },
-      1: { halign: 'left', cellWidth: 'auto' },
-      2: { halign: 'center', cellWidth: 30 }
+      0: { halign: 'center', cellWidth: 15 },
+      1: { halign: 'left', cellWidth: 'auto' }
     },
     willDrawCell: function(data) {
+      // Alignment for numbers
+      if (data.column.index > 1) {
+        data.cell.styles.halign = 'center';
+      }
       // Bold the last row (Total)
       if (data.row.index === tableBody.length - 1) {
         doc.setFont("helvetica", "bold");
       }
+      // Bold the CP stats
+      if (data.column.index === 1 || data.column.index === headRow.length - 1) {
+          doc.setFont("helvetica", "bold");
+      }
     },
     didDrawPage: function (data) {
-      if (data.pageNumber === 1 && doc.internal.getNumberOfPages() === 1) {
-         // optional branding
-      }
       const pageSize = doc.internal.pageSize;
       const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
       
@@ -323,7 +343,7 @@ async function generateMonthlySummaryPDF(
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(0, 0, 0);
-      doc.text(`Page ${data.pageNumber}`, 196, pageHeight - 10, { align: "right" });
+      doc.text(`Page ${data.pageNumber}`, 282, pageHeight - 10, { align: "right" });
     }
   });
 
@@ -654,6 +674,11 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
 
         let dateLabel = isUserWise ? "USER WISE REPORT" : "MONTHLY REPORT";
 
+        const overallCpStats: Record<string, Record<string, number>> = {};
+        const validSites: string[] = [];
+        let globalMinDate: Date | null = null;
+        let globalMaxDate: Date | null = null;
+
         for (const site of siteKeys) {
           let rows = sites[site];
           
@@ -674,12 +699,20 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
           }
           
           if (rows.length === 0) continue;
+          validSites.push(site);
 
           // Calculate Date Range for Header (Sort rawDateVal to get min/max independent of row order)
           const validRawDates = rows.map(r => r.rawDateVal).filter(d => d) as Date[];
           validRawDates.sort((a, b) => a.getTime() - b.getTime());
           const startDateVal = validRawDates.length > 0 ? validRawDates[0] : null;
           const endDateVal = validRawDates.length > 0 ? validRawDates[validRawDates.length - 1] : null;
+
+          if (startDateVal) {
+            if (!globalMinDate || startDateVal < globalMinDate) globalMinDate = startDateVal;
+          }
+          if (endDateVal) {
+            if (!globalMaxDate || endDateVal > globalMaxDate) globalMaxDate = endDateVal;
+          }
 
           // Sort Rows by Visit Date (d1)
           rows.sort((a, b) => {
@@ -697,12 +730,11 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
           const finalStartDateStr = manualStartFormatted || autoStartDateStr;
           const finalEndDateStr = manualEndFormatted || autoEndDateStr;
 
-          const cpStats: Record<string, number> = {};
-
           rows.forEach(r => {
             const name = r.cpFirmName;
             if (name) {
-              cpStats[name] = (cpStats[name] || 0) + 1;
+              if (!overallCpStats[name]) overallCpStats[name] = {};
+              overallCpStats[name][site] = (overallCpStats[name][site] || 0) + 1;
             }
           });
 
@@ -723,15 +755,18 @@ export async function processMonthlyCPVisitsFile(files: File | File[], manualSta
           
           const excelFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_raw.xlsx`;
           zip.file(excelFilename, excelBuffer);
-
-          // Generate Summary as PDF instead of PNG
-          const summaryDataUrl = await generateMonthlySummaryPDF(site, rows, cpStats, dateLabel, finalStartDateStr, finalEndDateStr);
-          const summaryFilename = `${site.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${isUserWise ? 'user_wise' : 'monthly'}_summary.pdf`;
-          images.push({ project_name: `Summary - ${site}`, image_url: summaryDataUrl, filename: summaryFilename });
-          zip.file(summaryFilename, summaryDataUrl.split(',')[1], { base64: true });
         }
 
-        if (images.length === 0) throw new Error("No matching records found for the selected criteria.");
+        if (images.length === 0 || validSites.length === 0) throw new Error("No matching records found for the selected criteria.");
+
+        // Generate ONE Overall Summary PDF
+        const finalGlobalStart = manualStartFormatted || (globalMinDate ? formatDate(globalMinDate) : "-");
+        const finalGlobalEnd = manualEndFormatted || (globalMaxDate ? formatDate(globalMaxDate) : "-");
+        
+        const summaryDataUrl = await generateOverallMonthlySummaryPDF(overallCpStats, validSites, dateLabel, finalGlobalStart, finalGlobalEnd);
+        const summaryFilename = `overall_${isUserWise ? 'user_wise' : 'monthly'}_summary.pdf`;
+        images.unshift({ project_name: `Overall Summary`, image_url: summaryDataUrl, filename: summaryFilename });
+        zip.file(summaryFilename, summaryDataUrl.split(',')[1], { base64: true });
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
         resolve({ images, zip_url: URL.createObjectURL(zipBlob), message: "Success" });
