@@ -11,7 +11,7 @@ import { processMonthlyLeadSiteVisitFile } from './utils/monthlyLeadSiteVisitPro
 import { processMonthlyCPVisitsFile } from './utils/monthlyCPVisitsProcessor';
 import { processPresalesLeadsFile } from './utils/presalesLeadsProcessor';
 import { processProjectWiseSourceFile } from './utils/projectWiseSourceProcessor';
-import { processUserPerformanceFile } from './utils/userPerformanceProcessor';
+import { processUserPerformanceFile, detectUsersFromFiles } from './utils/userPerformanceProcessor';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Daily Report Processor');
@@ -26,6 +26,37 @@ const App: React.FC = () => {
   const [endDate, setEndDate] = useState('');
   const [selectedSource, setSelectedSource] = useState('All');
   const sourceOptions = ['All', 'Digital', 'Channel Partner', 'Referral', 'Offer', 'Walk-In', 'Hoarding', 'Revisit'];
+
+  // User Performance Selection States
+  const [detectedUsers, setDetectedUsers] = useState<string[]>([]);
+  const [selectedPerformanceUsers, setSelectedPerformanceUsers] = useState<string[]>([]);
+  const [isDetectingUsers, setIsDetectingUsers] = useState(false);
+
+  React.useEffect(() => {
+    if (activeTab === 'User Performance Report') {
+      const targetFiles = files.length > 0 ? files : (file ? [file] : []);
+      if (targetFiles.length > 0) {
+        setIsDetectingUsers(true);
+        detectUsersFromFiles(targetFiles)
+          .then(users => {
+            setDetectedUsers(users);
+            setSelectedPerformanceUsers(users); // select all by default
+          })
+          .catch(err => {
+            console.error("Error scanning users:", err);
+          })
+          .finally(() => {
+            setIsDetectingUsers(false);
+          });
+      } else {
+        setDetectedUsers([]);
+        setSelectedPerformanceUsers([]);
+      }
+    } else {
+      setDetectedUsers([]);
+      setSelectedPerformanceUsers([]);
+    }
+  }, [files, file, activeTab]);
 
   const handleProcess = async () => {
     const isMultipleFilesTab = ['User Wise Site Visit Report', 'Monthly CP Visits Report', 'User Performance Report'].includes(activeTab);
@@ -59,7 +90,13 @@ const App: React.FC = () => {
       } else if (activeTab === 'Project Wise Lead Source Report') {
         data = await processProjectWiseSourceFile(file!, startDate, endDate);
       } else if (activeTab === 'User Performance Report') {
-        data = await processUserPerformanceFile(files.length > 0 ? files : (file ? [file] : []), startDate, endDate, selectedSource);
+        data = await processUserPerformanceFile(
+          files.length > 0 ? files : (file ? [file] : []),
+          startDate,
+          endDate,
+          selectedSource,
+          selectedPerformanceUsers
+        );
       } else {
         // Default to Daily Report Processor
         data = await processFile(file!);
@@ -81,6 +118,8 @@ const App: React.FC = () => {
     setResult(null);
     setError(null);
     setSelectedSource('All');
+    setDetectedUsers([]);
+    setSelectedPerformanceUsers([]);
 
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
@@ -278,6 +317,76 @@ const App: React.FC = () => {
               multiple={activeTab === 'User Wise Site Visit Report' || activeTab === 'Monthly CP Visits Report' || activeTab === 'User Performance Report'}
               disabled={isLoading} 
             />
+
+            {/* Checkbox User List for User Performance Report */}
+            {activeTab === 'User Performance Report' && detectedUsers.length > 0 && (
+              <div className="bg-white border border-slate-200 rounded-lg p-6 mb-8 max-w-4xl mx-auto shadow-sm animate-in fade-in duration-300">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-amber-200/50 pb-4 mb-4">
+                  <div>
+                    <h4 className="text-lg font-serif font-bold text-slate-800 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-[#d4af37]" />
+                      Select Users to Include in Report ({selectedPerformanceUsers.length} of {detectedUsers.length} selected)
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Uncheck any users you want to exclude from the generated PDF and Excel reports.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPerformanceUsers(detectedUsers)}
+                      className="text-xs font-semibold px-3 py-1.5 border border-slate-300 rounded hover:bg-slate-50 transition-colors"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPerformanceUsers([])}
+                      className="text-xs font-semibold px-3 py-1.5 border border-slate-300 rounded hover:bg-slate-50 transition-colors"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+                </div>
+
+                {isDetectingUsers ? (
+                  <div className="flex items-center gap-2 py-4 justify-center text-slate-500">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#d4af37]" />
+                    <span>Scanning files for users...</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-60 overflow-y-auto pr-2 scrollbar-thin">
+                    {detectedUsers.map(user => {
+                      const isChecked = selectedPerformanceUsers.includes(user);
+                      return (
+                        <label
+                          key={user}
+                          className={`flex items-center gap-3 p-2.5 rounded-md border text-sm cursor-pointer transition-all select-none hover:bg-slate-50 ${
+                            isChecked
+                              ? 'border-amber-300/60 bg-amber-50/20'
+                              : 'border-slate-200 text-slate-500'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              if (isChecked) {
+                                setSelectedPerformanceUsers(selectedPerformanceUsers.filter(u => u !== user));
+                              } else {
+                                setSelectedPerformanceUsers([...selectedPerformanceUsers, user]);
+                              }
+                            }}
+                            className="rounded border-slate-300 text-[#d4af37] focus:ring-[#d4af37] h-4 w-4"
+                          />
+                          <span className="font-semibold truncate">{user}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Action Area */}
             <div className="flex flex-col items-center justify-center mb-16 space-y-4">

@@ -360,13 +360,62 @@ function analyzeSheet(rawRows: any[][], isBookedSheet: boolean): SheetInfo {
   return { headerIndex, assignedToIdx, projectIdx, createdDateIdx, visitDateIdx, sourceIdx };
 }
 
+export async function detectUsersFromFiles(files: File[] | File): Promise<string[]> {
+  const filesArray = Array.isArray(files) ? files : [files];
+  const userNormalizationMap: Record<string, string> = {};
+
+  function normalizeUser(u: string): string {
+    const trimmed = u.trim().replace(/\s+/g, ' ');
+    const lower = trimmed.toLowerCase();
+    if (!userNormalizationMap[lower]) {
+      const capitalized = trimmed.split(' ')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+      userNormalizationMap[lower] = capitalized;
+    }
+    return userNormalizationMap[lower];
+  }
+
+  for (const file of filesArray) {
+    const rawRows = await parseExcelFile(file);
+    if (!rawRows || rawRows.length === 0) continue;
+
+    const infoNormal = analyzeSheet(rawRows, false);
+    const infoBooked = analyzeSheet(rawRows, true);
+    const info = infoNormal.headerIndex !== -1 ? infoNormal : infoBooked;
+
+    if (info.headerIndex === -1) continue;
+
+    for (let i = info.headerIndex + 1; i < rawRows.length; i++) {
+      const row = rawRows[i];
+      if (!row || row.length === 0) continue;
+
+      const isExcluded = row.some(cell => {
+         if (!cell) return false;
+         const s = String(cell).toLowerCase().trim();
+         return s === 'test' || s.includes('ramesh bodke');
+      });
+      if (isExcluded) continue;
+
+      const rawAssigned = info.assignedToIdx !== -1 ? row[info.assignedToIdx] : '';
+      const rawUser = rawAssigned ? String(rawAssigned).trim() : '';
+      if (!rawUser || rawUser === '-' || rawUser.toLowerCase() === 'unassigned' || rawUser.toLowerCase() === 'total' || rawUser.toLowerCase() === 'grand total' || rawUser.toLowerCase() === 'sum') continue;
+
+      normalizeUser(rawUser);
+    }
+  }
+
+  return Object.values(userNormalizationMap).sort();
+}
+
 // --- Main File Processor ---
 
 export async function processUserPerformanceFile(
   files: File[] | File,
   manualStartDate?: string,
   manualEndDate?: string,
-  sourceFilter: string = 'All'
+  sourceFilter: string = 'All',
+  selectedUsers?: string[]
 ): Promise<ProcessResponse> {
   const filesArray = Array.isArray(files) ? files : [files];
   
@@ -466,6 +515,12 @@ export async function processUserPerformanceFile(
 
       const user = normalizeUser(rawUser);
 
+      if (selectedUsers && selectedUsers.length > 0) {
+        if (!selectedUsers.includes(user)) {
+          continue;
+        }
+      }
+
       // Extract and resolve Project Name safely from Project column, fallback to USER_PROJECT_MAPPING
       let rawProject = info.projectIdx !== -1 ? String(row[info.projectIdx]).trim() : '';
       if (rawProject === '-' || rawProject.toLowerCase() === 'unassigned' || !rawProject) {
@@ -504,9 +559,6 @@ export async function processUserPerformanceFile(
       }
 
       if (activeDate) {
-        if (startFilter && activeDate < startFilter) continue;
-        if (endFilter && activeDate > endFilter) continue;
-
         if (!globalMinDate || activeDate < globalMinDate) globalMinDate = activeDate;
         if (!globalMaxDate || activeDate > globalMaxDate) globalMaxDate = activeDate;
       }
@@ -537,11 +589,15 @@ export async function processUserPerformanceFile(
 
   const projectsList = Object.keys(accumulatedData).sort();
   if (projectsList.length === 0) {
-    throw new Error("No record found matching the selected dates or source filter. Check if your spreadsheet filenames contain 'visit', 'revisit', or 'booked'.");
+    throw new Error("No record found. Check if your selected user filter or source filter is too restrictive.");
   }
 
-  const finalGlobalStart = manualStartDate || (globalMinDate ? formatDate(globalMinDate) : "-");
-  const finalGlobalEnd = manualEndDate || (globalMaxDate ? formatDate(globalMaxDate) : "-");
+  const finalGlobalStart = (manualStartDate && parseDate(manualStartDate))
+    ? formatDate(parseDate(manualStartDate)!)
+    : (globalMinDate ? formatDate(globalMinDate) : "-");
+  const finalGlobalEnd = (manualEndDate && parseDate(manualEndDate))
+    ? formatDate(parseDate(manualEndDate)!)
+    : (globalMaxDate ? formatDate(globalMaxDate) : "-");
 
   const getProjectStatsList = (proj: string): UserPerfStats[] => {
     const usersMap = accumulatedData[proj];
