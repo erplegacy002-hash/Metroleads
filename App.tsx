@@ -11,6 +11,7 @@ import { processMonthlyLeadSiteVisitFile } from './utils/monthlyLeadSiteVisitPro
 import { processMonthlyCPVisitsFile } from './utils/monthlyCPVisitsProcessor';
 import { processPresalesLeadsFile } from './utils/presalesLeadsProcessor';
 import { processProjectWiseSourceFile } from './utils/projectWiseSourceProcessor';
+import { processUserPerformanceFile } from './utils/userPerformanceProcessor';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Daily Report Processor');
@@ -27,7 +28,7 @@ const App: React.FC = () => {
   const sourceOptions = ['All', 'Digital', 'Channel Partner', 'Referral', 'Offer', 'Walk-In', 'Hoarding', 'Revisit'];
 
   const handleProcess = async () => {
-    const isMultipleFilesTab = ['User Wise Site Visit Report', 'Monthly CP Visits Report'].includes(activeTab);
+    const isMultipleFilesTab = ['User Wise Site Visit Report', 'Monthly CP Visits Report', 'User Performance Report'].includes(activeTab);
     if (isMultipleFilesTab) {
       if (files.length === 0) return;
     } else {
@@ -57,6 +58,8 @@ const App: React.FC = () => {
         data = await processPresalesLeadsFile(file!);
       } else if (activeTab === 'Project Wise Lead Source Report') {
         data = await processProjectWiseSourceFile(file!, startDate, endDate);
+      } else if (activeTab === 'User Performance Report') {
+        data = await processUserPerformanceFile(files.length > 0 ? files : (file ? [file] : []), startDate, endDate, selectedSource);
       } else {
         // Default to Daily Report Processor
         data = await processFile(file!);
@@ -121,6 +124,7 @@ const App: React.FC = () => {
     { id: 'Monthly (Lead + Site Visit) Report', label: 'Monthly (Lead + Site Visit) Report', icon: FileText },
     { id: 'Presales Leads Report', label: 'Presales Leads Report', icon: Users },
     { id: 'Project Wise Lead Source Report', label: 'Project Wise Lead Source Report', icon: FileText },
+    { id: 'User Performance Report', label: 'User Performance Report', icon: Users },
   ];
 
   const isProcessorTab = tabs.map(t => t.id).includes(activeTab);
@@ -213,7 +217,9 @@ const App: React.FC = () => {
                           ? 'Automated presales leads summary grouped by user and lead details.'
                           : activeTab === 'Project Wise Lead Source Report'
                             ? 'Project-wise lead source segregation (Digital & Offline excluded).'
-                            : 'Automated formatting for Project Performance Reports (Browser Mode)'}
+                            : activeTab === 'User Performance Report'
+                              ? 'Automated user performance analytics grouped by project containing site visits, revisits, bookings, and average lead age.'
+                              : 'Automated formatting for Project Performance Reports (Browser Mode)'}
               </p>
             </div>
 
@@ -269,7 +275,7 @@ const App: React.FC = () => {
               selectedFile={file} 
               onFilesSelect={setFiles}
               selectedFiles={files}
-              multiple={activeTab === 'User Wise Site Visit Report' || activeTab === 'Monthly CP Visits Report'}
+              multiple={activeTab === 'User Wise Site Visit Report' || activeTab === 'Monthly CP Visits Report' || activeTab === 'User Performance Report'}
               disabled={isLoading} 
             />
 
@@ -284,10 +290,10 @@ const App: React.FC = () => {
 
               <button
                 onClick={handleProcess}
-                disabled={((['User Wise Site Visit Report', 'Monthly CP Visits Report'].includes(activeTab)) ? files.length === 0 : !file) || isLoading}
+                disabled={((['User Wise Site Visit Report', 'Monthly CP Visits Report', 'User Performance Report'].includes(activeTab)) ? files.length === 0 : !file) || isLoading}
                 className={`
                   flex items-center space-x-3 px-10 py-4 rounded-none font-bold text-lg tracking-wider shadow-md transition-all border
-                  ${((['User Wise Site Visit Report', 'Monthly CP Visits Report'].includes(activeTab)) ? files.length === 0 : !file) || isLoading
+                  ${((['User Wise Site Visit Report', 'Monthly CP Visits Report', 'User Performance Report'].includes(activeTab)) ? files.length === 0 : !file) || isLoading
                     ? 'bg-slate-300 text-slate-500 border-slate-300 cursor-not-allowed' 
                     : 'bg-[#1a1a1a] text-[#d4af37] border-[#d4af37] hover:bg-black hover:shadow-xl hover:scale-105'}
                 `}
@@ -315,7 +321,7 @@ const App: React.FC = () => {
                   </h3>
                   <a
                     href={result.zip_url}
-                    download="project_reports.zip"
+                    download={activeTab === 'User Performance Report' ? 'user_performance_report.zip' : 'project_reports.zip'}
                     className="flex items-center space-x-2 bg-[#d4af37] text-black px-6 py-2.5 rounded-sm hover:bg-[#c5a028] transition-colors shadow-sm font-bold text-sm uppercase tracking-wide"
                   >
                     <Download className="w-4 h-4" />
