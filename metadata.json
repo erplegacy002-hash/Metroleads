@@ -1,5 +1,6 @@
 {
   "name": "Copy of Metroleads calling report",
-  "description": "A tool to transform daily Excel call reports into formatted, project-specific image tables.",
-  "requestFramePermissions": []
+  "description": "A tool to transform daily Excel call reports into formatted, project-specific image tables and Bucket Site Visit reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

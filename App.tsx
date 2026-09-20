@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Loader2, Download, AlertCircle, FileText, MapPin, CalendarRange, CalendarDays, Calendar, Users } from 'lucide-react';
+import { Loader2, Download, AlertCircle, FileText, MapPin, CalendarRange, CalendarDays, Calendar, Users, Layers, Sparkles } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import ImageGallery from './components/ImageGallery';
 import { ProcessResponse } from './types';
@@ -12,6 +12,14 @@ import { processMonthlyCPVisitsFile } from './utils/monthlyCPVisitsProcessor';
 import { processPresalesLeadsFile } from './utils/presalesLeadsProcessor';
 import { processProjectWiseSourceFile } from './utils/projectWiseSourceProcessor';
 import { processUserPerformanceFile, detectUsersFromFiles } from './utils/userPerformanceProcessor';
+import { 
+  processBucketSiteVisitFile, 
+  detectBucketReportFields, 
+  getDefaultWeekRange, 
+  formatToDDMMYYYY, 
+  BucketReportAnalysis 
+} from './utils/bucketSiteVisitProcessor';
+import BucketReportConfig from './components/BucketReportConfig';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Daily Report Processor');
@@ -31,6 +39,66 @@ const App: React.FC = () => {
   const [detectedUsers, setDetectedUsers] = useState<string[]>([]);
   const [selectedPerformanceUsers, setSelectedPerformanceUsers] = useState<string[]>([]);
   const [isDetectingUsers, setIsDetectingUsers] = useState(false);
+
+  // Bucket Report states
+  const [bucketAnalysis, setBucketAnalysis] = useState<BucketReportAnalysis | null>(null);
+  const [isAnalyzingBucketFile, setIsAnalyzingBucketFile] = useState(false);
+  const [bucketReportTitle, setBucketReportTitle] = useState('');
+  const [selectedSalesColIdx, setSelectedSalesColIdx] = useState<number>(-1);
+  const [selectedBucketColIdx, setSelectedBucketColIdx] = useState<number>(-1);
+  const [selectedSalesUsers, setSelectedSalesUsers] = useState<string[]>([]);
+  const [selectedBuckets, setSelectedBuckets] = useState<string[]>([]);
+  const [columnFilters, setColumnFilters] = useState<Record<number, string[]>>({});
+
+  // Auto-scan uploaded Excel file for Bucket Report
+  React.useEffect(() => {
+    if (activeTab === 'Bucket Report') {
+      if (file) {
+        setIsAnalyzingBucketFile(true);
+        detectBucketReportFields(file, startDate, endDate)
+          .then(analysis => {
+            setBucketAnalysis(analysis);
+            setSelectedSalesColIdx(analysis.suggestedSalesColIdx);
+            setSelectedBucketColIdx(analysis.suggestedBucketColIdx);
+
+            const salesCol = analysis.detectedColumns.find(c => c.colIndex === analysis.suggestedSalesColIdx);
+            if (salesCol) setSelectedSalesUsers(salesCol.uniqueValues);
+
+            const bucketCol = analysis.detectedColumns.find(c => c.colIndex === analysis.suggestedBucketColIdx);
+            if (bucketCol) setSelectedBuckets(bucketCol.uniqueValues);
+
+            setBucketReportTitle(analysis.defaultTitle);
+            setColumnFilters({});
+          })
+          .catch(err => {
+            console.error("Error analyzing bucket report file:", err);
+          })
+          .finally(() => {
+            setIsAnalyzingBucketFile(false);
+          });
+      } else {
+        setBucketAnalysis(null);
+        setBucketReportTitle('');
+        setSelectedSalesColIdx(-1);
+        setSelectedBucketColIdx(-1);
+        setSelectedSalesUsers([]);
+        setSelectedBuckets([]);
+        setColumnFilters({});
+      }
+    }
+  }, [file, activeTab]);
+
+  // Update Bucket Report Title dates when date inputs change
+  React.useEffect(() => {
+    if (activeTab === 'Bucket Report' && bucketAnalysis) {
+      const proj = bucketAnalysis.detectedProject || 'Legacy Ekam';
+      const startDisp = startDate ? formatToDDMMYYYY(startDate) : bucketAnalysis.detectedStartDate;
+      const endDisp = endDate ? formatToDDMMYYYY(endDate) : bucketAnalysis.detectedEndDate;
+      if (!bucketReportTitle || bucketReportTitle.startsWith('Site Visits Report |')) {
+        setBucketReportTitle(`Site Visits Report | ${proj} | Week Report (${startDisp} to ${endDisp})`);
+      }
+    }
+  }, [startDate, endDate, activeTab]);
 
   React.useEffect(() => {
     if (activeTab === 'User Performance Report') {
@@ -73,7 +141,19 @@ const App: React.FC = () => {
     try {
       let data: ProcessResponse;
       
-      if (activeTab === 'Monthly Site Visit Report') {
+      if (activeTab === 'Bucket Report') {
+        if (!file) throw new Error("Please upload an Excel file to process.");
+        if (!bucketAnalysis) throw new Error("Scanning file columns. Please wait a moment and try again.");
+        data = await processBucketSiteVisitFile(file, {
+          salesColIdx: selectedSalesColIdx,
+          bucketColIdx: selectedBucketColIdx,
+          selectedSales: selectedSalesUsers,
+          selectedBuckets: selectedBuckets,
+          columnFilters,
+          reportTitle: bucketReportTitle || bucketAnalysis.defaultTitle,
+          headerIndex: bucketAnalysis.headerIndex
+        });
+      } else if (activeTab === 'Monthly Site Visit Report') {
         data = await processMonthlyFile(file!, startDate, endDate, selectedSource);
       } else if (activeTab === 'Monthly CP Visits Report') {
         data = await processMonthlyCPVisitsFile(files.length > 0 ? files : (file ? [file] : []), startDate, endDate, selectedSource);
@@ -131,7 +211,17 @@ const App: React.FC = () => {
       return `${year}-${month}-${day}`;
     };
 
-    if (tabId === 'Daily Site Visit Report') {
+    if (tabId === 'Bucket Report') {
+      setStartDate('');
+      setEndDate('');
+      setBucketAnalysis(null);
+      setBucketReportTitle('');
+      setSelectedSalesColIdx(-1);
+      setSelectedBucketColIdx(-1);
+      setSelectedSalesUsers([]);
+      setSelectedBuckets([]);
+      setColumnFilters({});
+    } else if (tabId === 'Daily Site Visit Report') {
       const formattedDate = formatDate(yesterday);
       setStartDate(formattedDate);
       setEndDate(formattedDate);
@@ -155,6 +245,7 @@ const App: React.FC = () => {
 
   const tabs = [
     { id: 'Daily Report Processor', label: 'Daily Report Processor', icon: FileText },
+    { id: 'Bucket Report', label: 'Bucket Report', icon: Layers },
     { id: 'Daily Site Visit Report', label: 'Daily Site Visit Report', icon: MapPin },
     { id: 'Weekly Site Visit Report', label: 'Weekly Site Visit Report', icon: CalendarDays },
     { id: 'Monthly Site Visit Report', label: 'Monthly Site Visit Report', icon: CalendarRange },
@@ -167,7 +258,7 @@ const App: React.FC = () => {
   ];
 
   const isProcessorTab = tabs.map(t => t.id).includes(activeTab);
-  const showDateInputs = activeTab !== 'Daily Report Processor' && activeTab !== 'Presales Leads Report';
+  const showDateInputs = activeTab !== 'Daily Report Processor' && activeTab !== 'Presales Leads Report' && activeTab !== 'Bucket Report';
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 font-sans">
@@ -242,23 +333,25 @@ const App: React.FC = () => {
                 {activeTab}
               </h2>
               <p className="text-lg text-slate-600 max-w-2xl mx-auto font-serif italic opacity-80">
-                {activeTab === 'Monthly Site Visit Report' 
-                  ? 'Automated monthly site visit summaries grouped by project.'
-                  : activeTab === 'Monthly CP Visits Report'
-                    ? 'Automated monthly CP visits summaries grouped by CP Firm.'
-                  : activeTab === 'Daily Site Visit Report'
-                    ? 'Automated daily site visit reports grouped by project.'
-                    : activeTab === 'Weekly Site Visit Report'
-                      ? 'Automated weekly site visit reports grouped by project.'
-                      : activeTab === 'Monthly (Lead + Site Visit) Report'
-                        ? 'Automated monthly lead & site visit summary grouped by project.'
-                        : activeTab === 'Presales Leads Report'
-                          ? 'Automated presales leads summary grouped by user and lead details.'
-                          : activeTab === 'Project Wise Lead Source Report'
-                            ? 'Project-wise lead source segregation (Digital & Offline excluded).'
-                            : activeTab === 'User Performance Report'
-                              ? 'Automated user performance analytics grouped by project containing site visits, revisits, bookings, and average lead age.'
-                              : 'Automated formatting for Project Performance Reports (Browser Mode)'}
+                {activeTab === 'Bucket Report'
+                  ? 'Dynamic Bucket report detecting categorical columns with multiselect records and custom report title.'
+                  : activeTab === 'Monthly Site Visit Report' 
+                    ? 'Automated monthly site visit summaries grouped by project.'
+                    : activeTab === 'Monthly CP Visits Report'
+                      ? 'Automated monthly CP visits summaries grouped by CP Firm.'
+                    : activeTab === 'Daily Site Visit Report'
+                      ? 'Automated daily site visit reports grouped by project.'
+                      : activeTab === 'Weekly Site Visit Report'
+                        ? 'Automated weekly site visit reports grouped by project.'
+                        : activeTab === 'Monthly (Lead + Site Visit) Report'
+                          ? 'Automated monthly lead & site visit summary grouped by project.'
+                          : activeTab === 'Presales Leads Report'
+                            ? 'Automated presales leads summary grouped by user and lead details.'
+                            : activeTab === 'Project Wise Lead Source Report'
+                              ? 'Project-wise lead source segregation (Digital & Offline excluded).'
+                              : activeTab === 'User Performance Report'
+                                ? 'Automated user performance analytics grouped by project containing site visits, revisits, bookings, and average lead age.'
+                                : 'Automated formatting for Project Performance Reports (Browser Mode)'}
               </p>
             </div>
 
@@ -293,18 +386,20 @@ const App: React.FC = () => {
                     />
                   </div>
                 </div>
-                <div className="w-full">
-                  <label className="block text-sm font-semibold text-slate-700 mb-1 font-inter">Source</label>
-                  <select
-                    value={selectedSource}
-                    onChange={(e) => setSelectedSource(e.target.value)}
-                    className="block w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-[#d4af37] focus:border-[#d4af37] text-sm font-sans bg-white"
-                  >
-                    {sourceOptions.map(src => (
-                      <option key={src} value={src}>{src}</option>
-                    ))}
-                  </select>
-                </div>
+                {activeTab !== 'Bucket Report' && (
+                  <div className="w-full">
+                    <label className="block text-sm font-semibold text-slate-700 mb-1 font-inter">Source</label>
+                    <select
+                      value={selectedSource}
+                      onChange={(e) => setSelectedSource(e.target.value)}
+                      className="block w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-[#d4af37] focus:border-[#d4af37] text-sm font-sans bg-white"
+                    >
+                      {sourceOptions.map(src => (
+                        <option key={src} value={src}>{src}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
 
@@ -317,6 +412,40 @@ const App: React.FC = () => {
               multiple={activeTab === 'User Wise Site Visit Report' || activeTab === 'Monthly CP Visits Report' || activeTab === 'User Performance Report'}
               disabled={isLoading} 
             />
+
+            {/* Bucket Report Scanning State */}
+            {activeTab === 'Bucket Report' && isAnalyzingBucketFile && (
+              <div className="flex items-center justify-center space-x-3 py-8 text-amber-700 bg-amber-50/70 border border-amber-200 rounded-xl mb-6 max-w-4xl mx-auto">
+                <Loader2 className="w-5 h-5 animate-spin text-[#d4af37]" />
+                <span className="text-sm font-semibold">Scanning Excel columns and detecting repeated record fields...</span>
+              </div>
+            )}
+
+            {/* Bucket Report Configuration & Dynamic Multiselects */}
+            {activeTab === 'Bucket Report' && bucketAnalysis && file && !isAnalyzingBucketFile && (
+              <BucketReportConfig
+                analysis={bucketAnalysis}
+                file={file}
+                reportTitle={bucketReportTitle}
+                onReportTitleChange={setBucketReportTitle}
+                selectedSalesColIdx={selectedSalesColIdx}
+                onSalesColIdxChange={setSelectedSalesColIdx}
+                selectedBucketColIdx={selectedBucketColIdx}
+                onBucketColIdxChange={setSelectedBucketColIdx}
+                selectedSalesUsers={selectedSalesUsers}
+                onSelectedSalesUsersChange={setSelectedSalesUsers}
+                selectedBuckets={selectedBuckets}
+                onSelectedBucketsChange={setSelectedBuckets}
+                columnFilters={columnFilters}
+                onColumnFiltersChange={setColumnFilters}
+                onResetToDefaultTitle={() => {
+                  const proj = bucketAnalysis.detectedProject || 'Legacy Ekam';
+                  const startDisp = bucketAnalysis.detectedStartDate;
+                  const endDisp = bucketAnalysis.detectedEndDate;
+                  setBucketReportTitle(`Site Visits Report | ${proj} | Week Report (${startDisp} to ${endDisp})`);
+                }}
+              />
+            )}
 
             {/* Checkbox User List for User Performance Report */}
             {activeTab === 'User Performance Report' && detectedUsers.length > 0 && (
@@ -430,7 +559,7 @@ const App: React.FC = () => {
                   </h3>
                   <a
                     href={result.zip_url}
-                    download={activeTab === 'User Performance Report' ? 'user_performance_report.zip' : 'project_reports.zip'}
+                    download={activeTab === 'User Performance Report' ? 'user_performance_report.zip' : (activeTab === 'Bucket Report - Site Visit' ? 'bucket_site_visit_report.zip' : 'project_reports.zip')}
                     className="flex items-center space-x-2 bg-[#d4af37] text-black px-6 py-2.5 rounded-sm hover:bg-[#c5a028] transition-colors shadow-sm font-bold text-sm uppercase tracking-wide"
                   >
                     <Download className="w-4 h-4" />
