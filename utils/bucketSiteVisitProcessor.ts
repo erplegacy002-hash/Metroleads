@@ -5,24 +5,28 @@ import { jsPDF } from 'jspdf';
 import { GeneratedImage, ProcessResponse } from '../types';
 import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING } from './projectMapping';
 
-// Canonical bucket list matching image format
+// Canonical bucket list matching required format for Lead Levels and Enquiry Levels:
+// Open, Site Visit Scheduled, Site Visited, Cold, Warm, Hot, Discard, Booked
 export const DEFAULT_BUCKET_LIST = [
   'Open',
   'Site Visit Scheduled',
   'Site Visited',
-  'Revisited',
   'Cold',
   'Warm',
   'Hot',
-  'Discard'
+  'Discard',
+  'Booked'
 ];
 
 export const DEFAULT_PRESALES_BUCKET_LIST = [
   'Open',
+  'Site Visit Scheduled',
+  'Site Visited',
   'Cold',
   'Warm',
   'Hot',
-  'Discard'
+  'Discard',
+  'Booked'
 ];
 
 export function normalizeBucketCasing(val: string): string {
@@ -30,13 +34,15 @@ export function normalizeBucketCasing(val: string): string {
   const lower = trimmed.toLowerCase();
   const canonicalMap: Record<string, string> = {
     'open': 'Open',
+    'site visit scheduled': 'Site Visit Scheduled',
+    'site visited': 'Site Visited',
     'cold': 'Cold',
     'warm': 'Warm',
     'hot': 'Hot',
     'discard': 'Discard',
-    'site visit scheduled': 'Site Visit Scheduled',
-    'site visited': 'Site Visited',
+    'booked': 'Booked',
     'revisited': 'Revisited',
+    're-visited': 'Revisited',
     'lost': 'Lost',
     'junk': 'Junk',
     'drop': 'Drop'
@@ -453,7 +459,7 @@ export async function detectBucketReportFields(
           let roleLabel = rawHeader;
 
           const hasCanonicalBucketValue = uniqueVals.some(v => 
-            ['open', 'cold', 'warm', 'hot', 'site visited', 'scheduled', 'revisited', 'discard'].includes(v.toLowerCase())
+            ['open', 'site visit scheduled', 'site visited', 'cold', 'warm', 'hot', 'discard', 'booked', 'scheduled', 'revisited'].includes(v.toLowerCase())
           );
           const hasKnownSalesValue = uniqueVals.some(v => 
             USER_PROJECT_MAPPING[v] || USER_TEAM_MAPPING[v] || ['alex dmello', 'amol patil', 'prasad patne', 'bhavya jain', 'manisha singh', 'smita kad'].includes(v.toLowerCase())
