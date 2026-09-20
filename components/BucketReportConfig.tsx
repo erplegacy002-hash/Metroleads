@@ -30,6 +30,8 @@ interface BucketReportConfigProps {
   onSalesColIdxChange: (idx: number) => void;
   selectedBucketColIdx: number;
   onBucketColIdxChange: (idx: number) => void;
+  selectedAgencyColIdx?: number;
+  onAgencyColIdxChange?: (idx: number) => void;
   selectedSalesUsers: string[];
   onSelectedSalesUsersChange: (users: string[]) => void;
   selectedBuckets: string[];
@@ -37,6 +39,7 @@ interface BucketReportConfigProps {
   columnFilters: Record<number, string[]>;
   onColumnFiltersChange: (filters: Record<number, string[]>) => void;
   onResetToDefaultTitle: () => void;
+  reportType?: 'sales' | 'presales';
 }
 
 const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
@@ -48,6 +51,8 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
   onSalesColIdxChange,
   selectedBucketColIdx,
   onBucketColIdxChange,
+  selectedAgencyColIdx = -1,
+  onAgencyColIdxChange,
   selectedSalesUsers,
   onSelectedSalesUsersChange,
   selectedBuckets,
@@ -55,7 +60,9 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
   columnFilters,
   onColumnFiltersChange,
   onResetToDefaultTitle,
+  reportType = 'sales',
 }) => {
+  const isPresales = reportType === 'presales';
   const [openDropdownColIdx, setOpenDropdownColIdx] = useState<number | null>(null);
   const [searchTerms, setSearchTerms] = useState<Record<number, string>>({});
   const [previewSummary, setPreviewSummary] = useState<BucketTableSummary | null>(null);
@@ -74,7 +81,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Update live preview whenever filters, buckets, sales users, or title change
+  // Update live preview whenever filters, buckets, sales users, agency, or title change
   useEffect(() => {
     let isMounted = true;
     setIsPreviewLoading(true);
@@ -82,11 +89,14 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
     computeBucketReportTable(file, {
       salesColIdx: selectedSalesColIdx,
       bucketColIdx: selectedBucketColIdx,
+      agencyColIdx: selectedAgencyColIdx,
       selectedSales: selectedSalesUsers,
       selectedBuckets: selectedBuckets,
       columnFilters,
       reportTitle: reportTitle || analysis.defaultTitle,
-      headerIndex: analysis.headerIndex
+      headerIndex: analysis.headerIndex,
+      reportType,
+      dimensionLabel: isPresales ? 'Telecaller' : 'Sales'
     })
       .then(summary => {
         if (isMounted) {
@@ -106,12 +116,15 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
     file,
     selectedSalesColIdx,
     selectedBucketColIdx,
+    selectedAgencyColIdx,
     selectedSalesUsers,
     selectedBuckets,
     columnFilters,
     reportTitle,
     analysis.headerIndex,
-    analysis.defaultTitle
+    analysis.defaultTitle,
+    reportType,
+    isPresales
   ]);
 
   const toggleValueForColumn = (colIdx: number, val: string) => {
@@ -201,13 +214,13 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
           type="text"
           value={reportTitle}
           onChange={(e) => onReportTitleChange(e.target.value)}
-          placeholder="e.g. Site Visits Report | Legacy Ekam | Week Report (07-09-2026 to 13-09-2026)"
+          placeholder={isPresales ? "e.g. Leads Report | Legacy Ekam | Week Report (07-09-2026 to 13-09-2026)" : "e.g. Site Visits Report | Legacy Ekam | Week Report (07-09-2026 to 13-09-2026)"}
           className="w-full px-4 py-2.5 text-sm sm:text-base font-medium border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#d4af37] focus:border-[#d4af37] text-slate-900 bg-slate-50/50"
         />
         <div className="mt-2.5 flex items-start gap-2 text-xs text-slate-500">
           <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <span>
-            Default format: <strong>Site Visits Report | {analysis.detectedProject || 'Legacy Ekam'} | Week Report ({analysis.detectedStartDate} to {analysis.detectedEndDate})</strong>. You can customize this title above as needed.
+            Default format: <strong>{isPresales ? 'Leads Report' : 'Site Visits Report'} | {analysis.detectedProject || 'Legacy Ekam'} | Week Report ({analysis.detectedStartDate} to {analysis.detectedEndDate})</strong>. You can customize this title above as needed.
           </span>
         </div>
       </div>
@@ -225,11 +238,11 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
         </div>
 
         {/* Primary Role Mapping Controls */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 p-4 bg-amber-50/40 border border-amber-200/60 rounded-lg">
+        <div className={`grid grid-cols-1 ${isPresales ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4 mb-6 p-4 bg-amber-50/40 border border-amber-200/60 rounded-lg`}>
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <Users className="w-4 h-4 text-slate-600" />
-              Row Dimension: Sales Column
+              Row Dimension: {isPresales ? 'Telecaller' : 'Sales Column'}
             </label>
             <select
               value={selectedSalesColIdx}
@@ -249,10 +262,38 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
             </select>
           </div>
 
+          {isPresales && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-purple-600" />
+                Sub-Row Dimension: Agency Name
+              </label>
+              <select
+                value={selectedAgencyColIdx}
+                onChange={(e) => {
+                  const newIdx = parseInt(e.target.value, 10);
+                  if (onAgencyColIdxChange) onAgencyColIdxChange(newIdx);
+                }}
+                className="w-full text-xs sm:text-sm font-medium border border-slate-300 rounded-md px-3 py-2 bg-white text-slate-800 focus:ring-[#d4af37] focus:border-[#d4af37]"
+              >
+                <option value={-1}>None (Single Row)</option>
+                {analysis.detectedColumns.map(col => (
+                  <option key={col.colIndex} value={col.colIndex}>
+                    {col.headerName} ({col.uniqueValues.length} unique agencies)
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-purple-800 mt-1 flex items-center gap-1 font-medium">
+                <Check className="w-3 h-3 text-purple-600 shrink-0" />
+                Blank agency records are categorized as "(blank)"
+              </p>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <Filter className="w-4 h-4 text-slate-600" />
-              Column Dimension: Buckets / Stages
+              Column Dimension: {isPresales ? 'AI Lead Level / Buckets' : 'Buckets / Stages'}
             </label>
             <select
               value={selectedBucketColIdx}
@@ -270,10 +311,10 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                 </option>
               ))}
             </select>
-            {analysis.detectedColumns.find(c => c.colIndex === selectedBucketColIdx && (c.headerName.toLowerCase().includes('enquiry level') || c.role === 'bucket')) && (
+            {analysis.detectedColumns.find(c => c.colIndex === selectedBucketColIdx && (c.headerName.toLowerCase().includes('enquiry level') || c.headerName.toLowerCase().includes('lead level') || c.role === 'bucket')) && (
               <p className="text-[11px] text-amber-800 mt-1 flex items-center gap-1 font-medium">
                 <Check className="w-3 h-3 text-emerald-600 shrink-0" />
-                Blank Enquiry Level records are counted as "Open" for report consideration
+                Blank Enquiry/Lead Level records are counted as "Open"
               </p>
             )}
           </div>
@@ -283,6 +324,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {analysis.detectedColumns.map(col => {
             const isSales = col.colIndex === selectedSalesColIdx;
+            const isAgency = col.colIndex === selectedAgencyColIdx;
             const isBucket = col.colIndex === selectedBucketColIdx;
             const selectedVals = getSelectedValuesForCol(col.colIndex);
             const isOpen = openDropdownColIdx === col.colIndex;
@@ -295,10 +337,13 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
             let roleBadge = 'Filter';
             let roleBadgeColor = 'bg-slate-100 text-slate-700 border-slate-200';
             if (isSales) {
-              roleBadge = 'Sales Rows';
+              roleBadge = isPresales ? 'Telecaller Rows' : 'Sales Rows';
               roleBadgeColor = 'bg-blue-50 text-blue-800 border-blue-200 font-semibold';
+            } else if (isAgency) {
+              roleBadge = 'Agency Sub-Rows';
+              roleBadgeColor = 'bg-purple-50 text-purple-800 border-purple-200 font-semibold';
             } else if (isBucket) {
-              roleBadge = 'Bucket Columns';
+              roleBadge = isPresales ? 'AI Lead Level' : 'Bucket Columns';
               roleBadgeColor = 'bg-amber-100 text-amber-900 border-amber-300 font-semibold';
             } else if (col.role === 'project') {
               roleBadge = 'Project Filter';
@@ -456,7 +501,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                   {/* Row 2: Column Headers matching image */}
                   <tr>
                     <th className="border border-black px-3 py-1.5 text-left font-bold text-black bg-white min-w-[140px]">
-                      Sales
+                      {previewSummary.dimensionLabel || (isPresales ? 'Telecaller' : 'Sales')}
                     </th>
                     <th className="border border-black px-3 py-1.5 text-center font-bold text-black bg-white min-w-[90px] whitespace-nowrap">
                       Grand Total
@@ -469,21 +514,58 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {previewSummary.rows.map((row) => (
-                    <tr key={row.salesUser} className="hover:bg-slate-50/50">
-                      <td className="border border-black px-3 py-1.5 text-left font-normal text-black whitespace-nowrap">
-                        {row.salesUser}
-                      </td>
-                      <td className="border border-black px-3 py-1.5 text-center font-normal text-black">
-                        {row.grandTotal}
-                      </td>
-                      {previewSummary.buckets.map(b => (
-                        <td key={b} className="border border-black px-2.5 py-1.5 text-center font-normal text-black">
-                          {row.bucketCounts[b] || 0}
+                  {previewSummary.rows.map((row) => {
+                    if (row.subRows && row.subRows.length > 0) {
+                      return (
+                        <React.Fragment key={row.salesUser}>
+                          <tr className="bg-slate-50/80">
+                            <td className="border border-black px-3 py-1.5 text-left font-bold text-black whitespace-nowrap">
+                              {row.salesUser}
+                            </td>
+                            <td className="border border-black px-3 py-1.5 text-center font-bold text-black">
+                              {row.grandTotal}
+                            </td>
+                            {previewSummary.buckets.map(b => (
+                              <td key={b} className="border border-black px-2.5 py-1.5 text-center font-bold text-black">
+                                {row.bucketCounts[b] || 0}
+                              </td>
+                            ))}
+                          </tr>
+                          {row.subRows.map(sub => (
+                            <tr key={`${row.salesUser}-${sub.agency}`} className="hover:bg-slate-50/50">
+                              <td className="border border-black px-3 py-1 text-left font-normal text-slate-800 whitespace-nowrap">
+                                {sub.agency}
+                              </td>
+                              <td className="border border-black px-3 py-1 text-center font-normal text-slate-800">
+                                {sub.grandTotal}
+                              </td>
+                              {previewSummary.buckets.map(b => (
+                                <td key={b} className="border border-black px-2.5 py-1 text-center font-normal text-slate-800">
+                                  {sub.bucketCounts[b] || 0}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      );
+                    }
+
+                    return (
+                      <tr key={row.salesUser} className="hover:bg-slate-50/50">
+                        <td className="border border-black px-3 py-1.5 text-left font-normal text-black whitespace-nowrap">
+                          {row.salesUser}
                         </td>
-                      ))}
-                    </tr>
-                  ))}
+                        <td className="border border-black px-3 py-1.5 text-center font-normal text-black">
+                          {row.grandTotal}
+                        </td>
+                        {previewSummary.buckets.map(b => (
+                          <td key={b} className="border border-black px-2.5 py-1.5 text-center font-normal text-black">
+                            {row.bucketCounts[b] || 0}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
                   {/* Footer Row: Grand Total matching image */}
                   <tr className="font-bold bg-white">
                     <td className="border border-black px-3 py-1.5 text-left font-bold text-black">
@@ -503,7 +585,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
             </div>
           ) : (
             <div className="py-8 text-center text-slate-400 italic text-sm">
-              {isPreviewLoading ? 'Calculating preview table...' : 'No sales records match the current selections.'}
+              {isPreviewLoading ? 'Calculating preview table...' : `No ${isPresales ? 'presales' : 'sales'} records match the current selections.`}
             </div>
           )}
         </div>

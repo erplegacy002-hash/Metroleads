@@ -17,10 +17,20 @@ export const DEFAULT_BUCKET_LIST = [
   'Discard'
 ];
 
+export const DEFAULT_PRESALES_BUCKET_LIST = [
+  'Open',
+  'Site Visit Scheduled',
+  'Site Visited',
+  'Cold',
+  'Warm',
+  'Hot',
+  'Discard'
+];
+
 export interface DetectedColumn {
   colIndex: number;
   headerName: string;
-  role: 'sales' | 'bucket' | 'project' | 'source' | 'other';
+  role: 'sales' | 'bucket' | 'project' | 'source' | 'agency' | 'other';
   roleLabel: string;
   uniqueValues: string[];
   valueCounts: Record<string, number>;
@@ -32,6 +42,7 @@ export interface BucketReportAnalysis {
   detectedColumns: DetectedColumn[];
   suggestedSalesColIdx: number;
   suggestedBucketColIdx: number;
+  suggestedAgencyColIdx?: number;
   suggestedProjectColIdx: number;
   suggestedDateColIdx?: number;
   detectedProject: string;
@@ -43,21 +54,30 @@ export interface BucketReportAnalysis {
   totalRows: number;
 }
 
-export interface BucketRowData {
-  salesUser: string;
+export interface BucketSubRowData {
+  agency: string;
   grandTotal: number;
   bucketCounts: Record<string, number>;
 }
 
+export interface BucketRowData {
+  salesUser: string;
+  grandTotal: number;
+  bucketCounts: Record<string, number>;
+  isGroupHeader?: boolean;
+  subRows?: BucketSubRowData[];
+}
+
 export interface BucketTableSummary {
   reportTitle: string;
-  columns: string[]; // ['Sales', 'Grand Total', ...buckets]
+  columns: string[]; // ['Telecaller' | 'Sales', 'Grand Total', ...buckets]
   buckets: string[];
   rows: BucketRowData[];
   columnTotals: {
     grandTotal: number;
     bucketTotals: Record<string, number>;
   };
+  dimensionLabel?: string;
 }
 
 function getCellValue(cell: any): string {
@@ -209,7 +229,12 @@ export function getDefaultWeekRange(): { startDate: string; endDate: string; dis
 /**
  * Parses the Excel file and detects columns having most records as same
  */
-export async function detectBucketReportFields(file: File, manualStart?: string, manualEnd?: string): Promise<BucketReportAnalysis> {
+export async function detectBucketReportFields(
+  file: File, 
+  manualStart?: string, 
+  manualEnd?: string,
+  reportType: 'sales' | 'presales' = 'sales'
+): Promise<BucketReportAnalysis> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -249,9 +274,9 @@ export async function detectBucketReportFields(file: File, manualStart?: string,
         // Identify Header Row
         let headerIndex = -1;
         const knownHeaderKeywords = [
-          'sales executive', 'enquiry level', 'project name', 'visit source', 'channel partner',
+          'sales executive', 'presales executive', 'presales', 'enquiry level', 'project name', 'visit source', 'channel partner',
           'call status', 'configuration', 'sales', 'assigned to', 'stage', 'sub stage', 'lead sub stage',
-          'bucket', 'status', 'project', 'source', 'lead source', 'date', 'customer name', 'lead name'
+          'bucket', 'status', 'project', 'source', 'lead source', 'date', 'customer name', 'lead name', 'caller', 'telecaller'
         ];
 
         let bestHeaderScore = -1;
@@ -289,19 +314,38 @@ export async function detectBucketReportFields(file: File, manualStart?: string,
 
         let suggestedSalesColIdx = -1;
         let suggestedBucketColIdx = -1;
+        let suggestedAgencyColIdx = -1;
         let suggestedProjectColIdx = -1;
         let suggestedDateColIdx = -1;
         let detectedProject = '';
 
-        const salesAliases = [
-          'sales executive', 'sales', 'assigned to', 'assigned_to', 'owner', 'executive',
-          'agent', 'sales person', 'caller', 'user'
+        const isPresales = reportType === 'presales';
+
+        const salesAliases = isPresales
+          ? [
+              'telecaller', 'caller', 'tele-caller', 'presales executive', 'presales', 'presales user', 'presale',
+              'assigned to', 'assigned_to', 'owner', 'executive', 'agent', 'sales executive', 'user'
+            ]
+          : [
+              'sales executive', 'sales', 'sales person', 'sales rep', 'assigned to', 'assigned_to', 'owner', 'executive',
+              'agent', 'caller', 'user'
+            ];
+
+        const agencyAliases = [
+          'agency me', 'agency name', 'agency', 'agency_name', 'agency-name'
         ];
-        const bucketAliases = [
-          'enquiry level', 'enquiry_level', 'enquirylevel',
-          'lead sub stage', 'sub stage', 'sub_stage', 'lead sub-stage', 'bucket',
-          'stage', 'status', 'lead status', 'disposition', 'lead state'
-        ];
+
+        const bucketAliases = isPresales
+          ? [
+              'ai lead level', 'lead level', 'enquiry level', 'enquiry_level', 'enquirylevel',
+              'lead sub stage', 'sub stage', 'sub_stage', 'lead sub-stage', 'bucket',
+              'stage', 'status', 'lead status', 'disposition', 'lead state'
+            ]
+          : [
+              'enquiry level', 'enquiry_level', 'enquirylevel',
+              'lead sub stage', 'sub stage', 'sub_stage', 'lead sub-stage', 'bucket',
+              'stage', 'status', 'lead status', 'disposition', 'lead state'
+            ];
         const projectAliases = [
           'project name', 'project', 'site', 'project (af)', 'project(af)', 'property'
         ];
@@ -326,7 +370,7 @@ export async function detectBucketReportFields(file: File, manualStart?: string,
           if (isExcludedHeader) continue;
 
           // Track Date column for date range detection
-          if (lowerHeader === 'date' || lowerHeader === 'created at') {
+          if (lowerHeader === 'lead date' || lowerHeader === 'date' || lowerHeader === 'created at') {
             if (suggestedDateColIdx === -1) {
               suggestedDateColIdx = c;
             }
@@ -338,7 +382,7 @@ export async function detectBucketReportFields(file: File, manualStart?: string,
             continue;
           }
 
-          const isEnquiryLevel = lowerHeader === 'enquiry level' || lowerHeader.includes('enquiry level') || bucketAliases.some(b => lowerHeader === b);
+          const isEnquiryLevel = lowerHeader === 'enquiry level' || lowerHeader === 'ai lead level' || lowerHeader.includes('lead level') || bucketAliases.some(b => lowerHeader === b);
           const values: string[] = [];
           const counts: Record<string, number> = {};
 
@@ -372,29 +416,52 @@ export async function detectBucketReportFields(file: File, manualStart?: string,
           if (isNumericId) continue;
 
           // Determine role and precise label
-          let role: 'sales' | 'bucket' | 'project' | 'source' | 'other' = 'other';
+          let role: 'sales' | 'bucket' | 'project' | 'source' | 'agency' | 'other' = 'other';
           let roleLabel = rawHeader;
 
           const hasCanonicalBucketValue = uniqueVals.some(v => 
             ['open', 'cold', 'warm', 'hot', 'site visited', 'scheduled', 'revisited', 'discard'].includes(v.toLowerCase())
           );
           const hasKnownSalesValue = uniqueVals.some(v => 
-            USER_PROJECT_MAPPING[v] || USER_TEAM_MAPPING[v] || ['alex dmello', 'amol patil', 'prasad patne'].includes(v.toLowerCase())
+            USER_PROJECT_MAPPING[v] || USER_TEAM_MAPPING[v] || ['alex dmello', 'amol patil', 'prasad patne', 'bhavya jain', 'manisha singh', 'smita kad'].includes(v.toLowerCase())
           );
           const hasProjectValue = uniqueVals.some(v => 
             ['legacy ekam', 'legacy milestone', 'legacy kairos', 'aqua life', 'milestone', 'kairos', 'ekam'].includes(v.toLowerCase())
           );
 
-          if (lowerHeader === 'enquiry level' || isEnquiryLevel || hasCanonicalBucketValue) {
+          if (isPresales && (lowerHeader === 'telecaller' || lowerHeader === 'caller')) {
+            role = 'sales';
+            roleLabel = 'Telecaller (Rows)';
+            suggestedSalesColIdx = c;
+          } else if (isPresales && (lowerHeader === 'agency me' || agencyAliases.some(a => lowerHeader === a))) {
+            role = 'agency';
+            roleLabel = 'Agency Name (Sub-Rows)';
+            if (suggestedAgencyColIdx === -1 || lowerHeader === 'agency me' || lowerHeader === 'agency name') {
+              suggestedAgencyColIdx = c;
+            }
+          } else if (isPresales && (lowerHeader === 'ai lead level' || lowerHeader === 'lead level')) {
             role = 'bucket';
-            roleLabel = 'Enquiry Level / Buckets (Columns)';
-            if (suggestedBucketColIdx === -1 || lowerHeader === 'enquiry level') {
+            roleLabel = 'AI Lead Level (Buckets)';
+            suggestedBucketColIdx = c;
+          } else if (lowerHeader === 'enquiry level' || isEnquiryLevel || hasCanonicalBucketValue) {
+            role = 'bucket';
+            roleLabel = isPresales ? 'AI Lead Level (Buckets)' : 'Enquiry Level / Buckets (Columns)';
+            if (suggestedBucketColIdx === -1 || lowerHeader === 'ai lead level' || lowerHeader === 'enquiry level') {
               suggestedBucketColIdx = c;
             }
-          } else if (lowerHeader === 'sales executive' || (salesAliases.some(a => lowerHeader === a) && !lowerHeader.includes('sourcing') && !lowerHeader.includes('source')) || hasKnownSalesValue) {
+          } else if (
+            (isPresales && (lowerHeader.includes('presale') || lowerHeader.includes('telecaller') || lowerHeader.includes('caller'))) ||
+            (!isPresales && (lowerHeader === 'sales executive' || lowerHeader === 'sales')) ||
+            (salesAliases.some(a => lowerHeader === a) && !lowerHeader.includes('sourcing') && !lowerHeader.includes('source')) ||
+            hasKnownSalesValue
+          ) {
             role = 'sales';
-            roleLabel = 'Sales Executive (Rows)';
-            if (suggestedSalesColIdx === -1 || lowerHeader === 'sales executive') {
+            roleLabel = isPresales ? 'Telecaller (Rows)' : 'Sales Executive (Rows)';
+            if (suggestedSalesColIdx === -1) {
+              suggestedSalesColIdx = c;
+            } else if (isPresales && (lowerHeader === 'telecaller' || lowerHeader === 'caller')) {
+              suggestedSalesColIdx = c;
+            } else if (!isPresales && lowerHeader === 'sales executive') {
               suggestedSalesColIdx = c;
             }
           } else if (projectAliases.some(a => lowerHeader === a || lowerHeader.includes(a)) || hasProjectValue) {
@@ -409,21 +476,23 @@ export async function detectBucketReportFields(file: File, manualStart?: string,
             }
           } else if (sourceAliases.some(a => lowerHeader === a || lowerHeader.includes(a))) {
             role = 'source';
-            roleLabel = 'Visit Source';
+            roleLabel = isPresales ? 'Lead Source' : 'Visit Source';
           } else if (lowerHeader.includes('channel partner')) {
             roleLabel = 'Channel Partner';
-          } else if (lowerHeader.includes('call status')) {
+          } else if (lowerHeader.includes('call status') || lowerHeader.includes('latest call status')) {
             roleLabel = 'Call Status';
           } else if (lowerHeader.includes('configuration')) {
             roleLabel = 'Configuration';
+          } else if (lowerHeader.includes('campaign name')) {
+            roleLabel = 'Campaign Name';
           } else if (lowerHeader.includes('sourcing manager')) {
             roleLabel = 'Sourcing Manager';
           } else if (lowerHeader.includes('source type')) {
             roleLabel = 'Source Type';
           } else if (lowerHeader.includes('source executive')) {
             roleLabel = 'Source Executive';
-          } else if (lowerHeader.includes('enquiry type')) {
-            roleLabel = 'Enquiry Type';
+          } else if (lowerHeader.includes('enquiry type') || lowerHeader.includes('lead type')) {
+            roleLabel = 'Lead Type';
           } else if (lowerHeader.includes('buying purpose')) {
             roleLabel = 'Buying Purpose';
           } else if (lowerHeader.includes('preferred location')) {
@@ -444,9 +513,10 @@ export async function detectBucketReportFields(file: File, manualStart?: string,
                 if (!counts['Open']) counts['Open'] = 0;
               }
 
-              // Ensure all canonical buckets appear in standard order
-              const lowerCanonical = DEFAULT_BUCKET_LIST.map(b => b.toLowerCase());
-              DEFAULT_BUCKET_LIST.forEach(cb => {
+              // Ensure canonical buckets appear in standard order
+              const targetBucketList = isPresales ? DEFAULT_PRESALES_BUCKET_LIST : DEFAULT_BUCKET_LIST;
+              const lowerCanonical = targetBucketList.map(b => b.toLowerCase());
+              targetBucketList.forEach(cb => {
                 if (!uniqueVals.some(v => v.toLowerCase() === cb.toLowerCase())) {
                   uniqueVals.push(cb);
                   if (!counts[cb]) counts[cb] = 0;
@@ -485,9 +555,9 @@ export async function detectBucketReportFields(file: File, manualStart?: string,
           suggestedBucketColIdx = cand.colIndex;
         }
 
-        // Sort detected columns so that Sales, Bucket, Project, Source appear first
+        // Sort detected columns so that Sales/Telecaller, Agency, Bucket, Project, Source appear first
         detectedColumns.sort((a, b) => {
-          const order = { sales: 1, bucket: 2, project: 3, source: 4, other: 5 };
+          const order = { sales: 1, agency: 2, bucket: 3, project: 4, source: 5, other: 6 };
           return (order[a.role] || 99) - (order[b.role] || 99);
         });
 
@@ -554,13 +624,35 @@ export async function detectBucketReportFields(file: File, manualStart?: string,
 
         const startDisp = manualStart ? formatToDDMMYYYY(manualStart) : detectedStartDate;
         const endDisp = manualEnd ? formatToDDMMYYYY(manualEnd) : detectedEndDate;
-        const defaultTitle = `Site Visits Report | ${detectedProject} | Week Report (${startDisp} to ${endDisp})`;
+
+        let defaultTitle: string;
+        if (isPresales) {
+          if (manualStart || manualEnd) {
+            defaultTitle = `Presales Leads Report | ${detectedProject} | Week Report (${startDisp} to ${endDisp})`;
+          } else {
+            const now = new Date();
+            const monthsArr = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
+            const dayStr = String(now.getDate()).padStart(2, '0');
+            const monStr = monthsArr[now.getMonth()];
+            const yrStr = now.getFullYear();
+            let hours = now.getHours();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            const minStr = String(now.getMinutes()).padStart(2, '0');
+            const timeStr = `${dayStr} ${monStr} ${yrStr} ${String(hours).padStart(2, '0')}:${minStr} ${ampm}`;
+            defaultTitle = `Presales Leads Report | ${detectedProject} | ${timeStr} | All Time`;
+          }
+        } else {
+          defaultTitle = `Site Visits Report | ${detectedProject} | Week Report (${startDisp} to ${endDisp})`;
+        }
 
         resolve({
           headerIndex,
           detectedColumns,
           suggestedSalesColIdx,
           suggestedBucketColIdx,
+          suggestedAgencyColIdx,
           suggestedProjectColIdx,
           suggestedDateColIdx,
           detectedProject,
@@ -589,11 +681,15 @@ export async function computeBucketReportTable(
   options: {
     salesColIdx: number;
     bucketColIdx: number;
+    agencyColIdx?: number;
     selectedSales: string[];
     selectedBuckets: string[];
+    selectedAgencies?: string[];
     columnFilters: Record<number, string[]>;
     reportTitle: string;
     headerIndex: number;
+    dimensionLabel?: string;
+    reportType?: 'sales' | 'presales';
   }
 ): Promise<BucketTableSummary> {
   return new Promise((resolve, reject) => {
@@ -605,16 +701,23 @@ export async function computeBucketReportTable(
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rawRows = utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
 
-        const { salesColIdx, bucketColIdx, selectedSales, selectedBuckets, columnFilters, reportTitle, headerIndex } = options;
+        const { salesColIdx, bucketColIdx, agencyColIdx, selectedSales, selectedBuckets, columnFilters, reportTitle, headerIndex, reportType } = options;
+        const isPresales = reportType === 'presales';
+        const dimensionLabel = options.dimensionLabel || (isPresales ? 'Telecaller' : 'Sales');
 
         const dataRows = rawRows.slice(headerIndex + 1);
 
+        const hasAgencyHierarchy = isPresales && agencyColIdx !== undefined && agencyColIdx !== -1;
+
         // Map of salesUser -> bucket -> count
         const userBucketMap: Record<string, Record<string, number>> = {};
+        // Map of salesUser -> agency -> bucket -> count
+        const userAgencyBucketMap: Record<string, Record<string, Record<string, number>>> = {};
         
         // Initialize all selected sales users with 0 for all selected buckets
         selectedSales.forEach(user => {
           userBucketMap[user] = {};
+          userAgencyBucketMap[user] = {};
           selectedBuckets.forEach(b => {
             userBucketMap[user][b] = 0;
           });
@@ -644,6 +747,16 @@ export async function computeBucketReportTable(
           const matchedUser = selectedSales.find(u => u.toLowerCase() === rawUser.toLowerCase());
           if (!matchedUser) continue;
 
+          // Normalize Agency Name: blank/NA/null/- is '(blank)'
+          let rawAgency = '(blank)';
+          if (hasAgencyHierarchy) {
+            rawAgency = normalizeRecordValue(getCellValue(row[agencyColIdx!]), false);
+            if (options.selectedAgencies && options.selectedAgencies.length > 0) {
+              const matchedAgencyFilter = options.selectedAgencies.some(a => a.toLowerCase() === rawAgency.toLowerCase());
+              if (!matchedAgencyFilter) continue;
+            }
+          }
+
           // Normalize bucket: blank/NA/null/- is considered Open for Enquiry Level
           const rawBucket = normalizeRecordValue(getCellValue(row[bucketColIdx]), true);
 
@@ -654,16 +767,68 @@ export async function computeBucketReportTable(
               userBucketMap[matchedUser] = {};
             }
             userBucketMap[matchedUser][matchedBucket] = (userBucketMap[matchedUser][matchedBucket] || 0) + 1;
+
+            if (hasAgencyHierarchy) {
+              if (!userAgencyBucketMap[matchedUser]) {
+                userAgencyBucketMap[matchedUser] = {};
+              }
+              if (!userAgencyBucketMap[matchedUser][rawAgency]) {
+                userAgencyBucketMap[matchedUser][rawAgency] = {};
+                selectedBuckets.forEach(b => {
+                  userAgencyBucketMap[matchedUser][rawAgency][b] = 0;
+                });
+              }
+              userAgencyBucketMap[matchedUser][rawAgency][matchedBucket] = (userAgencyBucketMap[matchedUser][rawAgency][matchedBucket] || 0) + 1;
+            }
           }
         }
 
+        // Sort telecallers / sales users alphabetically
+        const sortedUsers = [...selectedSales].sort((a, b) => a.localeCompare(b));
+
         // Build rows
-        const rows: BucketRowData[] = selectedSales.map(user => {
+        const rows: BucketRowData[] = sortedUsers.map(user => {
           const counts = userBucketMap[user] || {};
           let grandTotal = 0;
           selectedBuckets.forEach(b => {
             grandTotal += (counts[b] || 0);
           });
+
+          if (hasAgencyHierarchy) {
+            const agencyMap = userAgencyBucketMap[user] || {};
+            const agencyKeys = Object.keys(agencyMap);
+
+            // Sort agencies: '(blank)' comes first, then alphabetically
+            agencyKeys.sort((a, b) => {
+              if (a.toLowerCase() === '(blank)' && b.toLowerCase() !== '(blank)') return -1;
+              if (b.toLowerCase() === '(blank)' && a.toLowerCase() !== '(blank)') return 1;
+              return a.localeCompare(b);
+            });
+
+            const subRows: BucketSubRowData[] = agencyKeys
+              .map(agency => {
+                const bCounts = agencyMap[agency] || {};
+                let agencyGrandTotal = 0;
+                selectedBuckets.forEach(b => {
+                  agencyGrandTotal += (bCounts[b] || 0);
+                });
+                return {
+                  agency,
+                  grandTotal: agencyGrandTotal,
+                  bucketCounts: bCounts
+                };
+              })
+              .filter(sr => sr.grandTotal > 0 || agencyKeys.length === 1);
+
+            return {
+              salesUser: user,
+              grandTotal,
+              bucketCounts: counts,
+              isGroupHeader: true,
+              subRows
+            };
+          }
+
           return {
             salesUser: user,
             grandTotal,
@@ -687,13 +852,14 @@ export async function computeBucketReportTable(
 
         resolve({
           reportTitle,
-          columns: ['Sales', 'Grand Total', ...selectedBuckets],
+          columns: [dimensionLabel, 'Grand Total', ...selectedBuckets],
           buckets: selectedBuckets,
           rows,
           columnTotals: {
             grandTotal: overallGrandTotal,
             bucketTotals
-          }
+          },
+          dimensionLabel
         });
       } catch (err: any) {
         reject(err);
@@ -724,21 +890,46 @@ export async function generateBucketReportImage(summary: BucketTableSummary): Pr
   });
 
   const { reportTitle, buckets, rows, columnTotals } = summary;
+  const dimHeader = summary.dimensionLabel || 'Sales';
   const totalCols = 2 + buckets.length;
 
   const headerCellsHtml = buckets.map(b => `
     <th style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; font-weight: bold; text-align: center; color: #000000; background-color: #ffffff; white-space: nowrap; line-height: 1.2;">${b}</th>
   `).join('');
 
-  const rowCellsHtml = rows.map(r => `
-    <tr>
-      <td style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; text-align: left; font-weight: normal; color: #000000; white-space: nowrap;">${r.salesUser}</td>
-      <td style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; text-align: center; font-weight: normal; color: #000000;">${r.grandTotal}</td>
-      ${buckets.map(b => `
-        <td style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; text-align: center; font-weight: normal; color: #000000;">${r.bucketCounts[b] || 0}</td>
-      `).join('')}
-    </tr>
-  `).join('');
+  const rowCellsHtml = rows.map(r => {
+    if (r.subRows && r.subRows.length > 0) {
+      const headerRowHtml = `
+        <tr style="background-color: #ffffff;">
+          <td style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; text-align: left; font-weight: bold; color: #000000; white-space: nowrap;">${r.salesUser}</td>
+          <td style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; text-align: center; font-weight: bold; color: #000000;">${r.grandTotal}</td>
+          ${buckets.map(b => `
+            <td style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; text-align: center; font-weight: bold; color: #000000;">${r.bucketCounts[b] || 0}</td>
+          `).join('')}
+        </tr>
+      `;
+      const subRowsHtml = r.subRows.map(sub => `
+        <tr style="background-color: #ffffff;">
+          <td style="border: 1px solid #000000; padding: 5px 12px; font-size: 13px; text-align: left; font-weight: normal; color: #000000; white-space: nowrap;">${sub.agency}</td>
+          <td style="border: 1px solid #000000; padding: 5px 12px; font-size: 13px; text-align: center; font-weight: normal; color: #000000;">${sub.grandTotal}</td>
+          ${buckets.map(b => `
+            <td style="border: 1px solid #000000; padding: 5px 12px; font-size: 13px; text-align: center; font-weight: normal; color: #000000;">${sub.bucketCounts[b] || 0}</td>
+          `).join('')}
+        </tr>
+      `).join('');
+      return headerRowHtml + subRowsHtml;
+    }
+
+    return `
+      <tr style="background-color: #ffffff;">
+        <td style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; text-align: left; font-weight: normal; color: #000000; white-space: nowrap;">${r.salesUser}</td>
+        <td style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; text-align: center; font-weight: normal; color: #000000;">${r.grandTotal}</td>
+        ${buckets.map(b => `
+          <td style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; text-align: center; font-weight: normal; color: #000000;">${r.bucketCounts[b] || 0}</td>
+        `).join('')}
+      </tr>
+    `;
+  }).join('');
 
   const totalBucketCellsHtml = buckets.map(b => `
     <td style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; text-align: center; font-weight: bold; color: #000000;">${columnTotals.bucketTotals[b] || 0}</td>
@@ -755,7 +946,7 @@ export async function generateBucketReportImage(summary: BucketTableSummary): Pr
         </tr>
         <!-- Columns Header -->
         <tr>
-          <th style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; font-weight: bold; text-align: left; color: #000000; background-color: #ffffff; min-width: 140px;">Sales</th>
+          <th style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; font-weight: bold; text-align: left; color: #000000; background-color: #ffffff; min-width: 140px;">${dimHeader}</th>
           <th style="border: 1px solid #000000; padding: 6px 12px; font-size: 13.5px; font-weight: bold; text-align: center; color: #000000; background-color: #ffffff; min-width: 90px; white-space: nowrap;">Grand Total</th>
           ${headerCellsHtml}
         </tr>
@@ -794,6 +985,7 @@ export async function generateBucketReportImage(summary: BucketTableSummary): Pr
  */
 export function generateBucketReportExcel(summary: BucketTableSummary): ArrayBuffer {
   const { reportTitle, buckets, rows, columnTotals } = summary;
+  const dimHeader = summary.dimensionLabel || 'Sales';
   const wb = utils.book_new();
 
   // Excel AOA
@@ -803,30 +995,66 @@ export function generateBucketReportExcel(summary: BucketTableSummary): ArrayBuf
   aoa.push([reportTitle]);
 
   // Row 2: Headers
-  aoa.push(['Sales', 'Grand Total', ...buckets]);
+  aoa.push([dimHeader, 'Grand Total', ...buckets]);
 
-  // Row 3+: Data rows
-  const firstDataRow = 3; // 1-indexed in Excel: Row 3
-  const lastDataRow = 2 + rows.length;
+  let currentExcelRow = 3; // 1-indexed in Excel (Row 3 starts first data row)
+  const telecallerExcelRows: number[] = [];
 
-  rows.forEach((r, idx) => {
-    const excelRowNum = firstDataRow + idx;
-    // Grand Total formula: SUM of all bucket columns from C to last col
-    const lastColLetter = utils.encode_col(1 + buckets.length);
-    const formula = `SUM(C${excelRowNum}:${lastColLetter}${excelRowNum})`;
+  rows.forEach(r => {
+    if (r.subRows && r.subRows.length > 0) {
+      const telecallerRowIdx = currentExcelRow;
+      telecallerExcelRows.push(telecallerRowIdx);
+      const firstSubRow = currentExcelRow + 1;
+      const lastSubRow = currentExcelRow + r.subRows.length;
 
-    const rowArray: any[] = [
-      r.salesUser,
-      { f: formula, v: r.grandTotal, t: 'n' },
-      ...buckets.map(b => r.bucketCounts[b] || 0)
-    ];
-    aoa.push(rowArray);
+      // Telecaller Row: Grand Total formula sums subrows
+      const lastColLetter = utils.encode_col(1 + buckets.length);
+      const telecallerGrandTotalFormula = `SUM(B${firstSubRow}:B${lastSubRow})`;
+
+      const telecallerRowArr: any[] = [
+        r.salesUser,
+        { f: telecallerGrandTotalFormula, v: r.grandTotal, t: 'n' },
+        ...buckets.map((b, bIdx) => {
+          const colLetter = utils.encode_col(2 + bIdx);
+          return { f: `SUM(${colLetter}${firstSubRow}:${colLetter}${lastSubRow})`, v: r.bucketCounts[b] || 0, t: 'n' };
+        })
+      ];
+      aoa.push(telecallerRowArr);
+      currentExcelRow++;
+
+      // Subrows
+      r.subRows.forEach(sub => {
+        const subRowIdx = currentExcelRow;
+        const subGrandTotalFormula = `SUM(C${subRowIdx}:${lastColLetter}${subRowIdx})`;
+        aoa.push([
+          sub.agency,
+          { f: subGrandTotalFormula, v: sub.grandTotal, t: 'n' },
+          ...buckets.map(b => sub.bucketCounts[b] || 0)
+        ]);
+        currentExcelRow++;
+      });
+    } else {
+      const rowIdx = currentExcelRow;
+      telecallerExcelRows.push(rowIdx);
+      const lastColLetter = utils.encode_col(1 + buckets.length);
+      const formula = `SUM(C${rowIdx}:${lastColLetter}${rowIdx})`;
+      aoa.push([
+        r.salesUser,
+        { f: formula, v: r.grandTotal, t: 'n' },
+        ...buckets.map(b => r.bucketCounts[b] || 0)
+      ]);
+      currentExcelRow++;
+    }
   });
 
   // Footer Row: Grand Total
-  const totalRowNum = lastDataRow + 1;
-  const grandTotalColLetter = 'B';
-  const grandTotalFormula = `SUM(B${firstDataRow}:B${lastDataRow})`;
+  const grandTotalRowIdx = currentExcelRow;
+  let grandTotalFormula = '';
+  if (telecallerExcelRows.length > 0) {
+    grandTotalFormula = `SUM(${telecallerExcelRows.map(r => `B${r}`).join(',')})`;
+  } else {
+    grandTotalFormula = `SUM(B3:B${grandTotalRowIdx - 1})`;
+  }
 
   const footerRow: any[] = [
     'Grand Total',
@@ -835,7 +1063,9 @@ export function generateBucketReportExcel(summary: BucketTableSummary): ArrayBuf
 
   buckets.forEach((b, bIdx) => {
     const colLetter = utils.encode_col(2 + bIdx);
-    const bucketFormula = `SUM(${colLetter}${firstDataRow}:${colLetter}${lastDataRow})`;
+    const bucketFormula = telecallerExcelRows.length > 0
+      ? `SUM(${telecallerExcelRows.map(r => `${colLetter}${r}`).join(',')})`
+      : `SUM(${colLetter}3:${colLetter}${grandTotalRowIdx - 1})`;
     footerRow.push({ f: bucketFormula, v: columnTotals.bucketTotals[b] || 0, t: 'n' });
   });
   aoa.push(footerRow);
@@ -849,12 +1079,13 @@ export function generateBucketReportExcel(summary: BucketTableSummary): ArrayBuf
 
   // Set column widths
   ws['!cols'] = [
-    { wch: 22 }, // Sales
+    { wch: 28 }, // Telecaller / Agency
     { wch: 14 }, // Grand Total
     ...buckets.map(b => ({ wch: Math.max(b.length + 3, 12) }))
   ];
 
-  utils.book_append_sheet(wb, ws, 'Site Visits Report');
+  const sheetName = summary.dimensionLabel === 'Telecaller' || summary.dimensionLabel === 'Presales' ? 'Presales Leads Report' : 'Site Visits Report';
+  utils.book_append_sheet(wb, ws, sheetName);
   const buffer = write(wb, { bookType: 'xlsx', type: 'array' });
   return buffer;
 }
@@ -902,18 +1133,22 @@ export async function generateBucketReportPDF(summary: BucketTableSummary, pngDa
 }
 
 /**
- * Main processor function for Bucket Report - Site Visit
+ * Main processor function for Bucket Report (Site Visits or Presales Leads)
  */
 export async function processBucketSiteVisitFile(
   file: File,
   options: {
     salesColIdx: number;
     bucketColIdx: number;
+    agencyColIdx?: number;
     selectedSales: string[];
     selectedBuckets: string[];
+    selectedAgencies?: string[];
     columnFilters: Record<number, string[]>;
     reportTitle: string;
     headerIndex: number;
+    dimensionLabel?: string;
+    reportType?: 'sales' | 'presales';
   }
 ): Promise<ProcessResponse> {
   const summary = await computeBucketReportTable(file, options);

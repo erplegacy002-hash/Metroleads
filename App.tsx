@@ -23,7 +23,19 @@ import BucketReportConfig from './components/BucketReportConfig';
 
 type AppPage = 'main' | 'metroleads';
 
-const BUCKET_TAB = { id: 'Bucket Report', label: 'Bucket Report', icon: Layers };
+export const BUCKET_REPORT_SALES = 'Bucket Report - Site Visits (Sales)';
+export const BUCKET_REPORT_PRESALES = 'Bucket Report - Leads (Presales)';
+
+const MAIN_PAGE_TABS = [
+  { id: BUCKET_REPORT_SALES, label: 'Bucket Report - Site Visits (Sales)', icon: Layers },
+  { id: BUCKET_REPORT_PRESALES, label: 'Bucket Report - Leads (Presales)', icon: Users },
+];
+
+export const isBucketReportTab = (tab: string) => 
+  tab === BUCKET_REPORT_SALES || tab === BUCKET_REPORT_PRESALES || tab === 'Bucket Report';
+
+export const getBucketReportType = (tab: string): 'sales' | 'presales' => 
+  tab === BUCKET_REPORT_PRESALES ? 'presales' : 'sales';
 
 const METROLEADS_TABS = [
   { id: 'Daily Report Processor', label: 'Daily Report Processor', icon: FileText },
@@ -49,7 +61,7 @@ const App: React.FC = () => {
     if (typeof window !== 'undefined' && window.location.hash.toLowerCase().includes('metroleads')) {
       return 'Daily Report Processor';
     }
-    return 'Bucket Report';
+    return BUCKET_REPORT_SALES;
   });
   const [file, setFile] = useState<File | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -74,6 +86,7 @@ const App: React.FC = () => {
   const [bucketReportTitle, setBucketReportTitle] = useState('');
   const [selectedSalesColIdx, setSelectedSalesColIdx] = useState<number>(-1);
   const [selectedBucketColIdx, setSelectedBucketColIdx] = useState<number>(-1);
+  const [selectedAgencyColIdx, setSelectedAgencyColIdx] = useState<number>(-1);
   const [selectedSalesUsers, setSelectedSalesUsers] = useState<string[]>([]);
   const [selectedBuckets, setSelectedBuckets] = useState<string[]>([]);
   const [columnFilters, setColumnFilters] = useState<Record<number, string[]>>({});
@@ -84,12 +97,14 @@ const App: React.FC = () => {
       const isMetroleads = window.location.hash.toLowerCase().includes('metroleads');
       if (isMetroleads) {
         setCurrentPage('metroleads');
-        if (activeTab === 'Bucket Report') {
+        if (isBucketReportTab(activeTab)) {
           setActiveTab('Daily Report Processor');
         }
       } else {
         setCurrentPage('main');
-        setActiveTab('Bucket Report');
+        if (!isBucketReportTab(activeTab)) {
+          setActiveTab(BUCKET_REPORT_SALES);
+        }
       }
     };
     window.addEventListener('hashchange', handleHashChange);
@@ -107,20 +122,22 @@ const App: React.FC = () => {
       setActiveTab('Daily Report Processor');
     } else {
       window.location.hash = '';
-      setActiveTab('Bucket Report');
+      setActiveTab(BUCKET_REPORT_SALES);
     }
   };
 
   // Auto-scan uploaded Excel file for Bucket Report
   React.useEffect(() => {
-    if (activeTab === 'Bucket Report') {
+    if (isBucketReportTab(activeTab)) {
       if (file) {
         setIsAnalyzingBucketFile(true);
-        detectBucketReportFields(file, startDate, endDate)
+        const reportType = getBucketReportType(activeTab);
+        detectBucketReportFields(file, startDate, endDate, reportType)
           .then(analysis => {
             setBucketAnalysis(analysis);
             setSelectedSalesColIdx(analysis.suggestedSalesColIdx);
             setSelectedBucketColIdx(analysis.suggestedBucketColIdx);
+            setSelectedAgencyColIdx(analysis.suggestedAgencyColIdx ?? -1);
 
             const salesCol = analysis.detectedColumns.find(c => c.colIndex === analysis.suggestedSalesColIdx);
             if (salesCol) setSelectedSalesUsers(salesCol.uniqueValues);
@@ -142,6 +159,7 @@ const App: React.FC = () => {
         setBucketReportTitle('');
         setSelectedSalesColIdx(-1);
         setSelectedBucketColIdx(-1);
+        setSelectedAgencyColIdx(-1);
         setSelectedSalesUsers([]);
         setSelectedBuckets([]);
         setColumnFilters({});
@@ -151,12 +169,14 @@ const App: React.FC = () => {
 
   // Update Bucket Report Title dates when date inputs change
   React.useEffect(() => {
-    if (activeTab === 'Bucket Report' && bucketAnalysis) {
+    if (isBucketReportTab(activeTab) && bucketAnalysis) {
       const proj = bucketAnalysis.detectedProject || 'Legacy Ekam';
       const startDisp = startDate ? formatToDDMMYYYY(startDate) : bucketAnalysis.detectedStartDate;
       const endDisp = endDate ? formatToDDMMYYYY(endDate) : bucketAnalysis.detectedEndDate;
-      if (!bucketReportTitle || bucketReportTitle.startsWith('Site Visits Report |')) {
-        setBucketReportTitle(`Site Visits Report | ${proj} | Week Report (${startDisp} to ${endDisp})`);
+      const reportType = getBucketReportType(activeTab);
+      const prefix = reportType === 'presales' ? 'Leads Report' : 'Site Visits Report';
+      if (!bucketReportTitle || bucketReportTitle.startsWith('Site Visits Report |') || bucketReportTitle.startsWith('Leads Report |')) {
+        setBucketReportTitle(`${prefix} | ${proj} | Week Report (${startDisp} to ${endDisp})`);
       }
     }
   }, [startDate, endDate, activeTab]);
@@ -202,17 +222,21 @@ const App: React.FC = () => {
     try {
       let data: ProcessResponse;
       
-      if (activeTab === 'Bucket Report') {
+      if (isBucketReportTab(activeTab)) {
         if (!file) throw new Error("Please upload an Excel file to process.");
         if (!bucketAnalysis) throw new Error("Scanning file columns. Please wait a moment and try again.");
+        const reportType = getBucketReportType(activeTab);
         data = await processBucketSiteVisitFile(file, {
           salesColIdx: selectedSalesColIdx,
           bucketColIdx: selectedBucketColIdx,
+          agencyColIdx: selectedAgencyColIdx,
           selectedSales: selectedSalesUsers,
           selectedBuckets: selectedBuckets,
           columnFilters,
           reportTitle: bucketReportTitle || bucketAnalysis.defaultTitle,
-          headerIndex: bucketAnalysis.headerIndex
+          headerIndex: bucketAnalysis.headerIndex,
+          reportType,
+          dimensionLabel: reportType === 'presales' ? 'Telecaller' : 'Sales'
         });
       } else if (activeTab === 'Monthly Site Visit Report') {
         data = await processMonthlyFile(file!, startDate, endDate, selectedSource);
@@ -272,7 +296,7 @@ const App: React.FC = () => {
       return `${year}-${month}-${day}`;
     };
 
-    if (tabId === 'Bucket Report') {
+    if (isBucketReportTab(tabId)) {
       setStartDate('');
       setEndDate('');
       setBucketAnalysis(null);
@@ -304,9 +328,9 @@ const App: React.FC = () => {
     }
   };
 
-  const currentTabs = currentPage === 'main' ? [BUCKET_TAB] : METROLEADS_TABS;
+  const currentTabs = currentPage === 'main' ? MAIN_PAGE_TABS : METROLEADS_TABS;
   const isProcessorTab = currentTabs.map(t => t.id).includes(activeTab);
-  const showDateInputs = activeTab !== 'Daily Report Processor' && activeTab !== 'Presales Leads Report' && activeTab !== 'Bucket Report';
+  const showDateInputs = activeTab !== 'Daily Report Processor' && activeTab !== 'Presales Leads Report' && !isBucketReportTab(activeTab);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 font-sans">
@@ -339,15 +363,29 @@ const App: React.FC = () => {
       <div className="bg-white border-b border-slate-200 sticky top-24 sm:top-32 z-20 shadow-sm">
         {currentPage === 'main' ? (
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-            <nav className="-mb-px flex space-x-8" aria-label="Main Navigation">
-              <button
-                onClick={() => handleTabChange('Bucket Report')}
-                className="whitespace-nowrap py-4 px-1 border-b-2 border-[#d4af37] text-[#1a1a1a] font-medium text-sm flex items-center space-x-2 outline-none"
-              >
-                <Layers className="w-4 h-4 text-[#d4af37]" />
-                <span className="font-montserrat uppercase tracking-widest text-[10px] sm:text-xs font-bold">Bucket Report</span>
-              </button>
-            </nav>
+            <div className="overflow-x-auto scrollbar-hide">
+              <nav className="-mb-px flex space-x-6 sm:space-x-8" aria-label="Main Navigation">
+                {MAIN_PAGE_TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => handleTabChange(tab.id)}
+                      className={`
+                        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 outline-none transition-colors
+                        ${isActive 
+                          ? 'border-[#d4af37] text-[#1a1a1a]' 
+                          : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}
+                      `}
+                    >
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-[#d4af37]' : ''}`} />
+                      <span className="font-montserrat uppercase tracking-widest text-[10px] sm:text-xs font-bold">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
 
             {/* Hyperlink button on main page to switch to Metroleads Reports page */}
             <a
@@ -357,7 +395,7 @@ const App: React.FC = () => {
                 navigateTo('metroleads');
               }}
               id="btn-nav-metroleads-reports"
-              className="inline-flex items-center space-x-2 px-3.5 sm:px-4 py-2 my-2 text-xs sm:text-sm font-bold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 shadow-sm transition-all border border-amber-400/80 group cursor-pointer"
+              className="inline-flex items-center space-x-2 px-3.5 sm:px-4 py-2 my-2 text-xs sm:text-sm font-bold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 shadow-sm transition-all border border-amber-400/80 group cursor-pointer shrink-0 ml-4"
               title="Open Metroleads Reports generation"
             >
               <span>(Metroleads Reports)</span>
@@ -383,7 +421,7 @@ const App: React.FC = () => {
                 className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-colors cursor-pointer shadow-xs"
               >
                 <ArrowLeft className="w-3.5 h-3.5 text-amber-700" />
-                <span>← Back to Bucket Report</span>
+                <span>← Back to Bucket Reports</span>
               </a>
             </div>
             <div className="overflow-x-auto scrollbar-hide">
@@ -449,9 +487,11 @@ const App: React.FC = () => {
                 {activeTab}
               </h2>
               <p className="text-lg text-slate-600 max-w-2xl mx-auto font-serif italic opacity-80">
-                {activeTab === 'Bucket Report'
-                  ? 'Dynamic Bucket report detecting categorical columns with multiselect records and custom report title.'
-                  : activeTab === 'Monthly Site Visit Report' 
+                {activeTab === BUCKET_REPORT_SALES
+                  ? 'Dynamic Bucket report for Site Visits (Sales), detecting categorical columns with multiselect records and custom report title.'
+                  : activeTab === BUCKET_REPORT_PRESALES
+                    ? 'Dynamic Bucket report for Leads (Presales), detecting caller/presales columns with multiselect records and custom report title.'
+                    : activeTab === 'Monthly Site Visit Report' 
                     ? 'Automated monthly site visit summaries grouped by project.'
                     : activeTab === 'Monthly CP Visits Report'
                       ? 'Automated monthly CP visits summaries grouped by CP Firm.'
@@ -502,7 +542,7 @@ const App: React.FC = () => {
                     />
                   </div>
                 </div>
-                {activeTab !== 'Bucket Report' && (
+                {!isBucketReportTab(activeTab) && (
                   <div className="w-full">
                     <label className="block text-sm font-semibold text-slate-700 mb-1 font-inter">Source</label>
                     <select
@@ -530,7 +570,7 @@ const App: React.FC = () => {
             />
 
             {/* Bucket Report Scanning State */}
-            {activeTab === 'Bucket Report' && isAnalyzingBucketFile && (
+            {isBucketReportTab(activeTab) && isAnalyzingBucketFile && (
               <div className="flex items-center justify-center space-x-3 py-8 text-amber-700 bg-amber-50/70 border border-amber-200 rounded-xl mb-6 max-w-4xl mx-auto">
                 <Loader2 className="w-5 h-5 animate-spin text-[#d4af37]" />
                 <span className="text-sm font-semibold">Scanning Excel columns and detecting repeated record fields...</span>
@@ -538,7 +578,7 @@ const App: React.FC = () => {
             )}
 
             {/* Bucket Report Configuration & Dynamic Multiselects */}
-            {activeTab === 'Bucket Report' && bucketAnalysis && file && !isAnalyzingBucketFile && (
+            {isBucketReportTab(activeTab) && bucketAnalysis && file && !isAnalyzingBucketFile && (
               <BucketReportConfig
                 analysis={bucketAnalysis}
                 file={file}
@@ -548,17 +588,17 @@ const App: React.FC = () => {
                 onSalesColIdxChange={setSelectedSalesColIdx}
                 selectedBucketColIdx={selectedBucketColIdx}
                 onBucketColIdxChange={setSelectedBucketColIdx}
+                selectedAgencyColIdx={selectedAgencyColIdx}
+                onAgencyColIdxChange={setSelectedAgencyColIdx}
                 selectedSalesUsers={selectedSalesUsers}
                 onSelectedSalesUsersChange={setSelectedSalesUsers}
                 selectedBuckets={selectedBuckets}
                 onSelectedBucketsChange={setSelectedBuckets}
                 columnFilters={columnFilters}
                 onColumnFiltersChange={setColumnFilters}
+                reportType={getBucketReportType(activeTab)}
                 onResetToDefaultTitle={() => {
-                  const proj = bucketAnalysis.detectedProject || 'Legacy Ekam';
-                  const startDisp = bucketAnalysis.detectedStartDate;
-                  const endDisp = bucketAnalysis.detectedEndDate;
-                  setBucketReportTitle(`Site Visits Report | ${proj} | Week Report (${startDisp} to ${endDisp})`);
+                  setBucketReportTitle(bucketAnalysis.defaultTitle);
                 }}
               />
             )}
@@ -675,7 +715,13 @@ const App: React.FC = () => {
                   </h3>
                   <a
                     href={result.zip_url}
-                    download={activeTab === 'User Performance Report' ? 'user_performance_report.zip' : (activeTab === 'Bucket Report - Site Visit' ? 'bucket_site_visit_report.zip' : 'project_reports.zip')}
+                    download={
+                      activeTab === 'User Performance Report' 
+                        ? 'user_performance_report.zip' 
+                        : isBucketReportTab(activeTab)
+                          ? (activeTab === BUCKET_REPORT_PRESALES ? 'bucket_leads_presales_report.zip' : 'bucket_site_visit_sales_report.zip')
+                          : 'project_reports.zip'
+                    }
                     className="flex items-center space-x-2 bg-[#d4af37] text-black px-6 py-2.5 rounded-sm hover:bg-[#c5a028] transition-colors shadow-sm font-bold text-sm uppercase tracking-wide"
                   >
                     <Download className="w-4 h-4" />
