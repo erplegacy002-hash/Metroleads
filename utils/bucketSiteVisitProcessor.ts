@@ -66,6 +66,37 @@ function getCellValue(cell: any): string {
   return String(cell);
 }
 
+/**
+ * Checks if a cell value represents an empty, missing, NA, or null value:
+ * - null or undefined
+ * - empty string or whitespace only ("   ")
+ * - "-" or "--"
+ * - "NA", "N/A", "na", "n/a"
+ * - "null", "NULL"
+ * - "undefined"
+ * - "(blank)"
+ */
+export function isBlankValue(val: any): boolean {
+  if (val === null || val === undefined) return true;
+  const s = String(typeof val === 'object' && val.v !== undefined ? val.v : val).trim();
+  if (s === '' || s === '-' || s === '--') return true;
+  const lower = s.toLowerCase();
+  return lower === 'na' || lower === 'n/a' || lower === 'null' || lower === 'undefined' || lower === 'none' || lower === '(blank)';
+}
+
+/**
+ * Normalizes a record value according to report rules:
+ * - Empty / NA / null / "-" / " " values are normalized to "(blank)"
+ * - Except for Enquiry Level (buckets), where blank/NA/null/"-" is normalized to "Open" per requirements
+ */
+export function normalizeRecordValue(val: any, isEnquiryLevel: boolean = false): string {
+  if (isBlankValue(val)) {
+    return isEnquiryLevel ? 'Open' : '(blank)';
+  }
+  const s = String(typeof val === 'object' && val.v !== undefined ? val.v : val).trim();
+  return s;
+}
+
 export function formatToDDMMYYYY(dateStr: string): string {
   if (!dateStr) return '';
   const dmyMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
@@ -312,23 +343,21 @@ export async function detectBucketReportFields(file: File, manualStart?: string,
           const counts: Record<string, number> = {};
 
           for (const row of dataRows) {
-            let rawVal = getCellValue(row[c]).trim();
-            // Requirement: "consider blank Enquiry Level as Open for the report consideration"
-            if (isEnquiryLevel) {
-              if (!rawVal || rawVal === '-' || rawVal.toLowerCase() === 'null' || rawVal.toLowerCase() === 'undefined') {
-                rawVal = 'Open';
-              }
-            }
-            if (rawVal && rawVal !== '-' && rawVal.toLowerCase() !== 'null' && rawVal.toLowerCase() !== 'undefined') {
-              values.push(rawVal);
-              counts[rawVal] = (counts[rawVal] || 0) + 1;
-            }
+            const rawVal = getCellValue(row[c]);
+            const val = normalizeRecordValue(rawVal, isEnquiryLevel);
+            values.push(val);
+            counts[val] = (counts[val] || 0) + 1;
           }
 
           const totalNonEmpty = values.length;
           if (totalNonEmpty === 0) continue;
 
-          const uniqueVals = Object.keys(counts);
+          // Order unique values naturally, keeping (blank) at the end if present
+          const rawUnique = Object.keys(counts);
+          const uniqueVals = rawUnique.filter(v => v !== '(blank)');
+          if (rawUnique.includes('(blank)')) {
+            uniqueVals.push('(blank)');
+          }
           const uniqueCount = uniqueVals.length;
 
           // Check if column has categorical property (distinct values are limited or ratio is low)
@@ -600,11 +629,8 @@ export async function computeBucketReportTable(
             const cIdx = parseInt(colIdxStr, 10);
             const allowed = columnFilters[cIdx];
             if (allowed && allowed.length > 0) {
-              let val = getCellValue(row[cIdx]).trim();
-              if (cIdx === bucketColIdx && (!val || val === '-' || val.toLowerCase() === 'null' || val.toLowerCase() === 'undefined')) {
-                val = 'Open';
-              }
-              if (val && !allowed.includes(val)) {
+              const val = normalizeRecordValue(getCellValue(row[cIdx]), cIdx === bucketColIdx);
+              if (!allowed.includes(val)) {
                 passesFilters = false;
                 break;
               }
@@ -612,18 +638,14 @@ export async function computeBucketReportTable(
           }
           if (!passesFilters) continue;
 
-          const rawUser = getCellValue(row[salesColIdx]).trim();
-          if (!rawUser || rawUser === '-') continue;
+          const rawUser = normalizeRecordValue(getCellValue(row[salesColIdx]), false);
 
           // Find matching sales user
           const matchedUser = selectedSales.find(u => u.toLowerCase() === rawUser.toLowerCase());
           if (!matchedUser) continue;
 
-          let rawBucket = getCellValue(row[bucketColIdx]).trim();
-          // Requirement: "consider blank Enquiry Level as Open for the report consideration"
-          if (!rawBucket || rawBucket === '-' || rawBucket.toLowerCase() === 'null' || rawBucket.toLowerCase() === 'undefined') {
-            rawBucket = 'Open';
-          }
+          // Normalize bucket: blank/NA/null/- is considered Open for Enquiry Level
+          const rawBucket = normalizeRecordValue(getCellValue(row[bucketColIdx]), true);
 
           // Match bucket case-insensitively or normalized
           const matchedBucket = selectedBuckets.find(b => b.toLowerCase() === rawBucket.toLowerCase());

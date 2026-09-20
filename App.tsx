@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Loader2, Download, AlertCircle, FileText, MapPin, CalendarRange, CalendarDays, Calendar, Users, Layers, Sparkles } from 'lucide-react';
+import { Loader2, Download, AlertCircle, FileText, MapPin, CalendarRange, CalendarDays, Calendar, Users, Layers, Sparkles, ExternalLink, ArrowLeft } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import ImageGallery from './components/ImageGallery';
 import { ProcessResponse } from './types';
@@ -21,8 +21,36 @@ import {
 } from './utils/bucketSiteVisitProcessor';
 import BucketReportConfig from './components/BucketReportConfig';
 
+type AppPage = 'main' | 'metroleads';
+
+const BUCKET_TAB = { id: 'Bucket Report', label: 'Bucket Report', icon: Layers };
+
+const METROLEADS_TABS = [
+  { id: 'Daily Report Processor', label: 'Daily Report Processor', icon: FileText },
+  { id: 'Daily Site Visit Report', label: 'Daily Site Visit Report', icon: MapPin },
+  { id: 'Weekly Site Visit Report', label: 'Weekly Site Visit Report', icon: CalendarDays },
+  { id: 'Monthly Site Visit Report', label: 'Monthly Site Visit Report', icon: CalendarRange },
+  { id: 'Monthly CP Visits Report', label: 'Monthly CP Visits Report', icon: CalendarRange },
+  { id: 'User Wise Site Visit Report', label: 'User Wise Site Visit Report', icon: Users },
+  { id: 'Monthly (Lead + Site Visit) Report', label: 'Monthly (Lead + Site Visit) Report', icon: FileText },
+  { id: 'Presales Leads Report', label: 'Presales Leads Report', icon: Users },
+  { id: 'Project Wise Lead Source Report', label: 'Project Wise Lead Source Report', icon: FileText },
+  { id: 'User Performance Report', label: 'User Performance Report', icon: Users },
+];
+
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('Daily Report Processor');
+  const [currentPage, setCurrentPage] = useState<AppPage>(() => {
+    if (typeof window !== 'undefined' && window.location.hash.toLowerCase().includes('metroleads')) {
+      return 'metroleads';
+    }
+    return 'main';
+  });
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (typeof window !== 'undefined' && window.location.hash.toLowerCase().includes('metroleads')) {
+      return 'Daily Report Processor';
+    }
+    return 'Bucket Report';
+  });
   const [file, setFile] = useState<File | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,6 +77,39 @@ const App: React.FC = () => {
   const [selectedSalesUsers, setSelectedSalesUsers] = useState<string[]>([]);
   const [selectedBuckets, setSelectedBuckets] = useState<string[]>([]);
   const [columnFilters, setColumnFilters] = useState<Record<number, string[]>>({});
+
+  // Sync hash routing for browser navigation
+  React.useEffect(() => {
+    const handleHashChange = () => {
+      const isMetroleads = window.location.hash.toLowerCase().includes('metroleads');
+      if (isMetroleads) {
+        setCurrentPage('metroleads');
+        if (activeTab === 'Bucket Report') {
+          setActiveTab('Daily Report Processor');
+        }
+      } else {
+        setCurrentPage('main');
+        setActiveTab('Bucket Report');
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [activeTab]);
+
+  const navigateTo = (page: AppPage) => {
+    setCurrentPage(page);
+    setFile(null);
+    setFiles([]);
+    setResult(null);
+    setError(null);
+    if (page === 'metroleads') {
+      window.location.hash = 'metroleads';
+      setActiveTab('Daily Report Processor');
+    } else {
+      window.location.hash = '';
+      setActiveTab('Bucket Report');
+    }
+  };
 
   // Auto-scan uploaded Excel file for Bucket Report
   React.useEffect(() => {
@@ -243,46 +304,23 @@ const App: React.FC = () => {
     }
   };
 
-  const tabs = [
-    { id: 'Daily Report Processor', label: 'Daily Report Processor', icon: FileText },
-    { id: 'Bucket Report', label: 'Bucket Report', icon: Layers },
-    { id: 'Daily Site Visit Report', label: 'Daily Site Visit Report', icon: MapPin },
-    { id: 'Weekly Site Visit Report', label: 'Weekly Site Visit Report', icon: CalendarDays },
-    { id: 'Monthly Site Visit Report', label: 'Monthly Site Visit Report', icon: CalendarRange },
-    { id: 'Monthly CP Visits Report', label: 'Monthly CP Visits Report', icon: CalendarRange },
-    { id: 'User Wise Site Visit Report', label: 'User Wise Site Visit Report', icon: Users },
-    { id: 'Monthly (Lead + Site Visit) Report', label: 'Monthly (Lead + Site Visit) Report', icon: FileText },
-    { id: 'Presales Leads Report', label: 'Presales Leads Report', icon: Users },
-    { id: 'Project Wise Lead Source Report', label: 'Project Wise Lead Source Report', icon: FileText },
-    { id: 'User Performance Report', label: 'User Performance Report', icon: Users },
-  ];
-
-  const isProcessorTab = tabs.map(t => t.id).includes(activeTab);
+  const currentTabs = currentPage === 'main' ? [BUCKET_TAB] : METROLEADS_TABS;
+  const isProcessorTab = currentTabs.map(t => t.id).includes(activeTab);
   const showDateInputs = activeTab !== 'Daily Report Processor' && activeTab !== 'Presales Leads Report' && activeTab !== 'Bucket Report';
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 font-sans">
-      {/* Branded Header - Logos Centered, Badge Top Right */}
+      {/* Branded Header - Legacy Logo Centered, Badge Top Right */}
       <header className="bg-white border-b border-amber-200/50 sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 sm:h-32 flex items-center justify-center relative">
           
-          {/* Main Logo Cluster (Centered) */}
-          <div className="flex items-center space-x-4 sm:space-x-12 scale-90 sm:scale-100">
-            {/* Metro Logo */}
-            <img 
-              src="https://d3uv32fm2waqiz.cloudfront.net/b6d7f27/img/metro-logo.png" 
-              alt="Metro Group" 
-              className="h-8 sm:h-14 w-auto object-contain"
-            />
-            
-            {/* X Separator */}
-            <span className="text-xl sm:text-4xl font-serif text-slate-300 font-bold italic">X</span>
-            
+          {/* Main Logo (Centered) - Metroleads logo removed per instructions */}
+          <div className="flex items-center justify-center scale-90 sm:scale-100">
             {/* Legacy Logo - Using provided GitHub raw format */}
             <img 
               src="https://github.com/erplegacy002-hash/testbalkemal/blob/main/LOGO.png?raw=true" 
               alt="Legacy Lifespaces" 
-              className="h-8 sm:h-14 w-auto object-contain"
+              className="h-10 sm:h-16 w-auto object-contain"
             />
           </div>
 
@@ -297,34 +335,112 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Tabs Navigation */}
-      <div className="bg-white border-b border-slate-200 sticky top-24 sm:top-32 z-20 shadow-sm overflow-x-auto scrollbar-hide">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleTabChange(tab.id)}
-                  className={`
-                    whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors outline-none
-                    ${isActive 
-                      ? 'border-[#d4af37] text-[#1a1a1a]' 
-                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}
-                  `}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-[#d4af37]' : ''}`} />
-                  <span className="font-montserrat uppercase tracking-widest text-[10px] sm:text-xs font-bold">{tab.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
+      {/* Tabs Navigation & Page Switcher */}
+      <div className="bg-white border-b border-slate-200 sticky top-24 sm:top-32 z-20 shadow-sm">
+        {currentPage === 'main' ? (
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+            <nav className="-mb-px flex space-x-8" aria-label="Main Navigation">
+              <button
+                onClick={() => handleTabChange('Bucket Report')}
+                className="whitespace-nowrap py-4 px-1 border-b-2 border-[#d4af37] text-[#1a1a1a] font-medium text-sm flex items-center space-x-2 outline-none"
+              >
+                <Layers className="w-4 h-4 text-[#d4af37]" />
+                <span className="font-montserrat uppercase tracking-widest text-[10px] sm:text-xs font-bold">Bucket Report</span>
+              </button>
+            </nav>
+
+            {/* Hyperlink button on main page to switch to Metroleads Reports page */}
+            <a
+              href="#metroleads"
+              onClick={(e) => {
+                e.preventDefault();
+                navigateTo('metroleads');
+              }}
+              id="btn-nav-metroleads-reports"
+              className="inline-flex items-center space-x-2 px-3.5 sm:px-4 py-2 my-2 text-xs sm:text-sm font-bold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 shadow-sm transition-all border border-amber-400/80 group cursor-pointer"
+              title="Open Metroleads Reports generation"
+            >
+              <span>(Metroleads Reports)</span>
+              <ExternalLink className="w-3.5 h-3.5 text-slate-950 group-hover:translate-x-0.5 transition-transform" />
+            </a>
+          </div>
+        ) : (
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between py-2.5 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-700 font-montserrat flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-[#d4af37]" />
+                  <span>Metroleads Reports Portal</span>
+                </span>
+              </div>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateTo('main');
+                }}
+                id="btn-back-to-bucket-report"
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-colors cursor-pointer shadow-xs"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-amber-700" />
+                <span>← Back to Bucket Report</span>
+              </a>
+            </div>
+            <div className="overflow-x-auto scrollbar-hide">
+              <nav className="-mb-px flex space-x-8" aria-label="Metroleads Tabs">
+                {METROLEADS_TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => handleTabChange(tab.id)}
+                      className={`
+                        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors outline-none
+                        ${isActive 
+                          ? 'border-[#d4af37] text-[#1a1a1a]' 
+                          : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}
+                      `}
+                    >
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-[#d4af37]' : ''}`} />
+                      <span className="font-montserrat uppercase tracking-widest text-[10px] sm:text-xs font-bold">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          </div>
+        )}
       </div>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        
+        {/* Hyperlink button banner on main page pointing to Metroleads Reports */}
+        {currentPage === 'main' && (
+          <div className="mb-10 p-4 sm:p-5 bg-gradient-to-r from-amber-50/90 via-amber-50/50 to-orange-50/40 border border-amber-200/80 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-center space-x-3.5 text-left">
+              <div className="p-3 bg-amber-100 rounded-xl text-amber-800 shrink-0">
+                <FileText className="w-5 h-5 text-[#d4af37]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Looking for Metroleads Reports?</h3>
+                <p className="text-xs text-slate-600">Access Daily calling, Monthly & Weekly site visits, CP, Lead source & User performance reports</p>
+              </div>
+            </div>
+            <a
+              href="#metroleads"
+              onClick={(e) => {
+                e.preventDefault();
+                navigateTo('metroleads');
+              }}
+              id="banner-metroleads-reports"
+              className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 hover:text-amber-200 text-xs sm:text-sm font-bold transition-all shadow-sm border border-slate-800 shrink-0 cursor-pointer"
+            >
+              <span>(Metroleads Reports)</span>
+              <ExternalLink className="w-4 h-4 text-amber-300" />
+            </a>
+          </div>
+        )}
         
         {isProcessorTab ? (
           <div className="animate-in fade-in duration-500">
