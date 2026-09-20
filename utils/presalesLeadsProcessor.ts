@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { toPng } from 'html-to-image';
 import { GeneratedImage, ProcessResponse } from '../types';
 import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING, DEFAULT_SITE } from './projectMapping';
+import { DEFAULT_PRESALES_BUCKET_LIST, normalizeBucketCasing } from './bucketSiteVisitProcessor';
 
 // --- Helpers ---
 
@@ -192,10 +193,10 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
         let cpFirmNameIdx = -1;
         let subSourceIdx = -1;
 
-        const assignedAliases = ['assigned to', 'assigned_to', 'owner', 'agent', 'executive', 'sales executive', 'allocated to', 'sales person', 'sourcing manager', 'closing manager'];
+        const assignedAliases = ['assigned to', 'assigned_to', 'owner', 'agent', 'executive', 'sales executive', 'allocated to', 'sales person', 'sourcing manager', 'closing manager', 'telecaller', 'caller'];
         const sourceAliases = ['lead source', 'lead source (f)', 'source', 'source of lead', 'enquiry source'];
         const subSourceAliases = ['sub source', 'sub source (u)', 'sub_source', 'subsource'];
-        const stateAliases = ['lead state', 'state', 'region', 'location'];
+        const stateAliases = ['lead level', 'lead state', 'enquiry level', 'state', 'lead stage', 'stage', 'region', 'location'];
         const pageNameAliases = ['page name', 'page_name', 'page', 'campaign', 'campaign name', 'ad set name', 'ad set', 'form name'];
         const cpFirmAliases = ['cp firm name', 'cp firm name (v)', 'cp name', 'channel partner firm name'];
 
@@ -205,7 +206,27 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
 
           const aIdx = findColumnIndex(row, assignedAliases);
           const sIdx = findColumnIndex(row, sourceAliases);
-          const stIdx = findColumnIndex(row, stateAliases);
+          
+          // Detect Lead Level / Lead State column (strictly avoiding AI Lead Level)
+          let stIdx = -1;
+          for (let c = 0; c < row.length; c++) {
+            const h = getCellValue(row[c]).toLowerCase().trim();
+            if (h.includes('ai lead level') || h.includes('ai_lead_level')) continue;
+            if (h === 'lead level' || h === 'lead_level' || h === 'leadlevel') {
+              stIdx = c;
+              break;
+            }
+          }
+          if (stIdx === -1) {
+            for (let c = 0; c < row.length; c++) {
+              const h = getCellValue(row[c]).toLowerCase().trim();
+              if (h.includes('ai lead level') || h.includes('ai_lead_level')) continue;
+              if (stateAliases.some(alias => h === alias || h.includes(alias))) {
+                stIdx = c;
+                break;
+              }
+            }
+          }
           
           if (aIdx !== -1 && (sIdx !== -1 || stIdx !== -1)) {
             headerIndex = i;
@@ -248,8 +269,10 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
              userName = matchedKey;
           }
 
-          // Extract other fields
-          const leadState = leadStateIdx !== -1 && row[leadStateIdx] ? getCellValue(row[leadStateIdx]).trim() : '-';
+          // Extract other fields with canonical Lead Level logic
+          // In Open, consider blank values in Lead Level column
+          const rawLeadState = leadStateIdx !== -1 && row[leadStateIdx] !== undefined ? getCellValue(row[leadStateIdx]) : '';
+          const leadState = normalizeBucketCasing(rawLeadState);
           const pageName = pageNameIdx !== -1 && row[pageNameIdx] ? getCellValue(row[pageNameIdx]).trim() : '-';
           
           // Determine Source using Keyword Logic
@@ -283,10 +306,25 @@ export async function processPresalesLeadsFile(file: File): Promise<ProcessRespo
             });
         });
 
-        // Sort: User (Asc) -> Count (Desc)
+        // Sort: User (Asc) -> Lead Level / State (by canonical Bucket Report order) -> Count (Desc)
+        const canonicalOrder = DEFAULT_PRESALES_BUCKET_LIST.map(b => b.toLowerCase());
         rows.sort((a, b) => {
             const userCompare = a.user.localeCompare(b.user);
             if (userCompare !== 0) return userCompare;
+
+            const idxA = canonicalOrder.indexOf(a.state.toLowerCase());
+            const idxB = canonicalOrder.indexOf(b.state.toLowerCase());
+            if (idxA !== -1 && idxB !== -1) {
+              if (idxA !== idxB) return idxA - idxB;
+            } else if (idxA !== -1) {
+              return -1;
+            } else if (idxB !== -1) {
+              return 1;
+            } else {
+              const stateCompare = a.state.localeCompare(b.state);
+              if (stateCompare !== 0) return stateCompare;
+            }
+
             return b.count - a.count;
         });
 

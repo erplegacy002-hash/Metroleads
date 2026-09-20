@@ -18,6 +18,7 @@ import {
   computeBucketReportTable, 
   BucketTableSummary, 
   DEFAULT_BUCKET_LIST,
+  isBlankValue,
   formatToDDMMYYYY 
 } from '../utils/bucketSiteVisitProcessor';
 
@@ -135,6 +136,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
         onSelectedSalesUsersChange([...selectedSalesUsers, val]);
       }
     } else if (colIdx === selectedBucketColIdx) {
+      if (val.toLowerCase() === '(blank)' || isBlankValue(val)) return;
       if (selectedBuckets.includes(val)) {
         onSelectedBucketsChange(selectedBuckets.filter(b => b !== val));
       } else {
@@ -160,7 +162,8 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
     if (colIdx === selectedSalesColIdx) {
       onSelectedSalesUsersChange(allVals);
     } else if (colIdx === selectedBucketColIdx) {
-      onSelectedBucketsChange(allVals);
+      const cleaned = allVals.filter(v => v.toLowerCase() !== '(blank)' && !isBlankValue(v));
+      onSelectedBucketsChange(cleaned);
     } else {
       onColumnFiltersChange({
         ...columnFilters,
@@ -301,13 +304,16 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                 const newIdx = parseInt(e.target.value, 10);
                 onBucketColIdxChange(newIdx);
                 const col = analysis.detectedColumns.find(c => c.colIndex === newIdx);
-                if (col) onSelectedBucketsChange(col.uniqueValues);
+                if (col) {
+                  const cleanedVals = col.uniqueValues.filter(v => v.toLowerCase() !== '(blank)' && !isBlankValue(v));
+                  onSelectedBucketsChange(cleanedVals);
+                }
               }}
               className="w-full text-xs sm:text-sm font-medium border border-slate-300 rounded-md px-3 py-2 bg-white text-slate-800 focus:ring-[#d4af37] focus:border-[#d4af37]"
             >
               {analysis.detectedColumns.map(col => (
                 <option key={col.colIndex} value={col.colIndex}>
-                  {col.headerName} ({col.uniqueValues.length} unique stages)
+                  {col.headerName} ({col.uniqueValues.filter(v => v.toLowerCase() !== '(blank)' && !isBlankValue(v)).length} unique stages)
                 </option>
               ))}
             </select>
@@ -330,7 +336,11 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
             const isOpen = openDropdownColIdx === col.colIndex;
             const term = searchTerms[col.colIndex] || '';
 
-            const filteredVals = col.uniqueValues.filter(v => 
+            const availableVals = isBucket 
+              ? col.uniqueValues.filter(v => v.toLowerCase() !== '(blank)' && !isBlankValue(v))
+              : col.uniqueValues;
+
+            const filteredVals = availableVals.filter(v => 
               v.toLowerCase().includes(term.toLowerCase())
             );
 

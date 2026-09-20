@@ -36,16 +36,20 @@ export function normalizeBucketCasing(val: string): string {
     'open': 'Open',
     'site visit scheduled': 'Site Visit Scheduled',
     'site visited': 'Site Visited',
+    'visit scheduled': 'Site Visit Scheduled',
+    'scheduled': 'Site Visit Scheduled',
+    'visited': 'Site Visited',
     'cold': 'Cold',
     'warm': 'Warm',
     'hot': 'Hot',
     'discard': 'Discard',
+    'drop': 'Discard',
+    'junk': 'Discard',
+    'lost': 'Discard',
     'booked': 'Booked',
+    'booking': 'Booked',
     'revisited': 'Revisited',
-    're-visited': 'Revisited',
-    'lost': 'Lost',
-    'junk': 'Junk',
-    'drop': 'Drop'
+    're-visited': 'Revisited'
   };
   return canonicalMap[lower] || (trimmed.length > 0 ? (trimmed.charAt(0).toUpperCase() + trimmed.slice(1)) : trimmed);
 }
@@ -416,9 +420,15 @@ export async function detectBucketReportFields(
             continue;
           }
 
-          const isExactLeadLevel = lowerHeader === 'lead level' || lowerHeader === 'lead_level' || lowerHeader === 'leadlevel';
           const isAiLeadLevel = lowerHeader === 'ai lead level' || lowerHeader === 'ai_lead_level' || lowerHeader.includes('ai lead level');
-          const isEnquiryLevel = isExactLeadLevel || lowerHeader === 'enquiry level' || lowerHeader.includes('enquiry level') || (!isAiLeadLevel && lowerHeader.includes('lead level')) || bucketAliases.some(b => lowerHeader === b);
+          const isExactLeadLevel = !isAiLeadLevel && (lowerHeader === 'lead level' || lowerHeader === 'lead_level' || lowerHeader === 'leadlevel');
+          const isEnquiryLevel = !isAiLeadLevel && (
+            isExactLeadLevel || 
+            lowerHeader === 'enquiry level' || 
+            lowerHeader.includes('enquiry level') || 
+            lowerHeader.includes('lead level') || 
+            bucketAliases.some(b => lowerHeader === b)
+          );
           const values: string[] = [];
           const counts: Record<string, number> = {};
 
@@ -486,10 +496,10 @@ export async function detectBucketReportFields(
             // User requested: "I want Lead Level to be used not AI Lead Level"
             role = 'other';
             roleLabel = 'AI Lead Level';
-          } else if (lowerHeader === 'enquiry level' || (!isPresales && (isEnquiryLevel || hasCanonicalBucketValue))) {
+          } else if (lowerHeader === 'enquiry level' || isEnquiryLevel || hasCanonicalBucketValue) {
             role = 'bucket';
             roleLabel = isPresales ? 'Lead Level (Buckets)' : 'Enquiry Level / Buckets (Columns)';
-            if (suggestedBucketColIdx === -1 || lowerHeader === 'enquiry level') {
+            if (suggestedBucketColIdx === -1 || lowerHeader === 'enquiry level' || lowerHeader === 'lead level') {
               suggestedBucketColIdx = c;
             }
           } else if (
@@ -550,30 +560,26 @@ export async function detectBucketReportFields(
             let sortedUniqueValues = [...uniqueVals].sort((a, b) => counts[b] - counts[a]);
 
             if (role === 'bucket') {
-              // Ensure 'Open' is present in unique values
-              if (!uniqueVals.includes('Open')) {
-                uniqueVals.push('Open');
-                if (!counts['Open']) counts['Open'] = 0;
-              }
+              // 1. Remove '(blank)' and any blank values from unique values, since blanks in bucket column are counted under 'Open'
+              const cleanUniqueVals = uniqueVals.filter(v => v.toLowerCase() !== '(blank)' && !isBlankValue(v));
 
-              // Ensure canonical buckets appear in standard order
-              const targetBucketList = isPresales ? DEFAULT_PRESALES_BUCKET_LIST : DEFAULT_BUCKET_LIST;
+              // 2. Canonical bucket list in required order:
+              // Open, Site Visit Scheduled, Site Visited, Cold, Warm, Hot, Discard, Booked
+              const targetBucketList = DEFAULT_BUCKET_LIST;
               const lowerCanonical = targetBucketList.map(b => b.toLowerCase());
+
+              // Ensure all canonical buckets exist in counts (default to 0 if not present in data)
               targetBucketList.forEach(cb => {
-                if (!uniqueVals.some(v => v.toLowerCase() === cb.toLowerCase())) {
-                  uniqueVals.push(cb);
-                  if (!counts[cb]) counts[cb] = 0;
-                }
+                if (!counts[cb]) counts[cb] = 0;
               });
 
-              sortedUniqueValues = [...uniqueVals].sort((a, b) => {
-                const idxA = lowerCanonical.indexOf(a.toLowerCase());
-                const idxB = lowerCanonical.indexOf(b.toLowerCase());
-                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-                if (idxA !== -1) return -1;
-                if (idxB !== -1) return 1;
-                return (counts[b] || 0) - (counts[a] || 0);
-              });
+              // Extra non-blank buckets from the file (if any, e.g. Revisited)
+              const extraBuckets = cleanUniqueVals.filter(v => 
+                !lowerCanonical.includes(v.toLowerCase())
+              );
+
+              // Strict canonical order first, then any extra buckets
+              sortedUniqueValues = [...targetBucketList, ...extraBuckets];
             }
 
             detectedColumns.push({
@@ -618,6 +624,25 @@ export async function detectBucketReportFields(
         if (suggestedBucketColIdx === -1 && detectedColumns.length > 1) {
           const cand = detectedColumns.find(col => col.role === 'bucket' && col.colIndex !== suggestedSalesColIdx) || detectedColumns[1];
           suggestedBucketColIdx = cand.colIndex;
+        }
+
+        // Bulletproof canonical bucket ordering and blank removal for the chosen bucket column
+        const bucketColObj = detectedColumns.find(col => col.colIndex === suggestedBucketColIdx);
+        if (bucketColObj) {
+          bucketColObj.role = 'bucket';
+          bucketColObj.roleLabel = isPresales ? 'Lead Level (Buckets)' : 'Enquiry Level / Buckets (Columns)';
+          
+          const cleanVals = bucketColObj.uniqueValues.filter(v => v.toLowerCase() !== '(blank)' && !isBlankValue(v));
+          const lowerCanonical = DEFAULT_BUCKET_LIST.map(b => b.toLowerCase());
+          
+          DEFAULT_BUCKET_LIST.forEach(cb => {
+            if (!bucketColObj.valueCounts[cb]) {
+              bucketColObj.valueCounts[cb] = 0;
+            }
+          });
+
+          const extraVals = cleanVals.filter(v => !lowerCanonical.includes(v.toLowerCase()));
+          bucketColObj.uniqueValues = [...DEFAULT_BUCKET_LIST, ...extraVals];
         }
 
         // Sort detected columns so that Sales/Telecaller, Agency, Bucket, Project, Source appear first
@@ -774,16 +799,29 @@ export async function computeBucketReportTable(
 
         const hasAgencyHierarchy = isPresales && agencyColIdx !== undefined && agencyColIdx !== -1;
 
+        // Clean selectedBuckets: remove any '(blank)' and sort strictly by canonical DEFAULT_BUCKET_LIST order
+        const lowerCanonical = DEFAULT_BUCKET_LIST.map(b => b.toLowerCase());
+        const cleanedBuckets = (selectedBuckets || [])
+          .filter(b => b.toLowerCase() !== '(blank)' && !isBlankValue(b))
+          .sort((a, b) => {
+            const idxA = lowerCanonical.indexOf(a.toLowerCase());
+            const idxB = lowerCanonical.indexOf(b.toLowerCase());
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return a.localeCompare(b);
+          });
+
         // Map of salesUser -> bucket -> count
         const userBucketMap: Record<string, Record<string, number>> = {};
         // Map of salesUser -> agency -> bucket -> count
         const userAgencyBucketMap: Record<string, Record<string, Record<string, number>>> = {};
         
-        // Initialize all selected sales users with 0 for all selected buckets
+        // Initialize all selected sales users with 0 for all cleaned buckets
         selectedSales.forEach(user => {
           userBucketMap[user] = {};
           userAgencyBucketMap[user] = {};
-          selectedBuckets.forEach(b => {
+          cleanedBuckets.forEach(b => {
             userBucketMap[user][b] = 0;
           });
         });
@@ -827,7 +865,7 @@ export async function computeBucketReportTable(
           rawBucket = normalizeBucketCasing(rawBucket);
 
           // Match bucket case-insensitively or normalized
-          const matchedBucket = selectedBuckets.find(b => b.toLowerCase().trim() === rawBucket.toLowerCase().trim());
+          const matchedBucket = cleanedBuckets.find(b => b.toLowerCase().trim() === rawBucket.toLowerCase().trim());
           if (matchedBucket) {
             if (!userBucketMap[matchedUser]) {
               userBucketMap[matchedUser] = {};
@@ -840,7 +878,7 @@ export async function computeBucketReportTable(
               }
               if (!userAgencyBucketMap[matchedUser][rawAgency]) {
                 userAgencyBucketMap[matchedUser][rawAgency] = {};
-                selectedBuckets.forEach(b => {
+                cleanedBuckets.forEach(b => {
                   userAgencyBucketMap[matchedUser][rawAgency][b] = 0;
                 });
               }
@@ -856,7 +894,7 @@ export async function computeBucketReportTable(
         const rows: BucketRowData[] = sortedUsers.map(user => {
           const counts = userBucketMap[user] || {};
           let grandTotal = 0;
-          selectedBuckets.forEach(b => {
+          cleanedBuckets.forEach(b => {
             grandTotal += (counts[b] || 0);
           });
 
@@ -875,7 +913,7 @@ export async function computeBucketReportTable(
               .map(agency => {
                 const bCounts = agencyMap[agency] || {};
                 let agencyGrandTotal = 0;
-                selectedBuckets.forEach(b => {
+                cleanedBuckets.forEach(b => {
                   agencyGrandTotal += (bCounts[b] || 0);
                 });
                 return {
@@ -905,21 +943,21 @@ export async function computeBucketReportTable(
         // Compute Column Totals
         let overallGrandTotal = 0;
         const bucketTotals: Record<string, number> = {};
-        selectedBuckets.forEach(b => {
+        cleanedBuckets.forEach(b => {
           bucketTotals[b] = 0;
         });
 
         rows.forEach(r => {
           overallGrandTotal += r.grandTotal;
-          selectedBuckets.forEach(b => {
+          cleanedBuckets.forEach(b => {
             bucketTotals[b] += (r.bucketCounts[b] || 0);
           });
         });
 
         resolve({
           reportTitle,
-          columns: [dimensionLabel, 'Grand Total', ...selectedBuckets],
-          buckets: selectedBuckets,
+          columns: [dimensionLabel, 'Grand Total', ...cleanedBuckets],
+          buckets: cleanedBuckets,
           rows,
           columnTotals: {
             grandTotal: overallGrandTotal,
