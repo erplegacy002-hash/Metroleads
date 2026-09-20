@@ -293,7 +293,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <Filter className="w-4 h-4 text-slate-600" />
-              Column Dimension: {isPresales ? 'AI Lead Level / Buckets' : 'Buckets / Stages'}
+              Column Dimension: {isPresales ? 'Lead Level / Buckets' : 'Buckets / Stages'}
             </label>
             <select
               value={selectedBucketColIdx}
@@ -311,10 +311,10 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                 </option>
               ))}
             </select>
-            {analysis.detectedColumns.find(c => c.colIndex === selectedBucketColIdx && (c.headerName.toLowerCase().includes('enquiry level') || c.headerName.toLowerCase().includes('lead level') || c.role === 'bucket')) && (
+            {analysis.detectedColumns.find(c => c.colIndex === selectedBucketColIdx && (c.headerName.toLowerCase().includes('lead level') || c.headerName.toLowerCase().includes('enquiry level') || c.role === 'bucket')) && (
               <p className="text-[11px] text-amber-800 mt-1 flex items-center gap-1 font-medium">
                 <Check className="w-3 h-3 text-emerald-600 shrink-0" />
-                Blank Enquiry/Lead Level records are counted as "Open"
+                Blank {isPresales ? 'Lead Level' : 'Enquiry Level'} records are counted as "Open"
               </p>
             )}
           </div>
@@ -343,7 +343,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
               roleBadge = 'Agency Sub-Rows';
               roleBadgeColor = 'bg-purple-50 text-purple-800 border-purple-200 font-semibold';
             } else if (isBucket) {
-              roleBadge = isPresales ? 'AI Lead Level' : 'Bucket Columns';
+              roleBadge = isPresales ? 'Lead Level' : 'Bucket Columns';
               roleBadgeColor = 'bg-amber-100 text-amber-900 border-amber-300 font-semibold';
             } else if (col.role === 'project') {
               roleBadge = 'Project Filter';

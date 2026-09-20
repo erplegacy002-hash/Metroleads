@@ -19,13 +19,30 @@ export const DEFAULT_BUCKET_LIST = [
 
 export const DEFAULT_PRESALES_BUCKET_LIST = [
   'Open',
-  'Site Visit Scheduled',
-  'Site Visited',
   'Cold',
   'Warm',
   'Hot',
   'Discard'
 ];
+
+export function normalizeBucketCasing(val: string): string {
+  const trimmed = val.trim();
+  const lower = trimmed.toLowerCase();
+  const canonicalMap: Record<string, string> = {
+    'open': 'Open',
+    'cold': 'Cold',
+    'warm': 'Warm',
+    'hot': 'Hot',
+    'discard': 'Discard',
+    'site visit scheduled': 'Site Visit Scheduled',
+    'site visited': 'Site Visited',
+    'revisited': 'Revisited',
+    'lost': 'Lost',
+    'junk': 'Junk',
+    'drop': 'Drop'
+  };
+  return canonicalMap[lower] || (trimmed.length > 0 ? (trimmed.charAt(0).toUpperCase() + trimmed.slice(1)) : trimmed);
+}
 
 export interface DetectedColumn {
   colIndex: number;
@@ -91,27 +108,38 @@ function getCellValue(cell: any): string {
  * - null or undefined
  * - empty string or whitespace only ("   ")
  * - "-" or "--"
- * - "NA", "N/A", "na", "n/a"
+ * - "NA", "N/A", "na", "n/a", "N / A", "n / a"
  * - "null", "NULL"
  * - "undefined"
  * - "(blank)"
+ * - "none", "NONE"
  */
 export function isBlankValue(val: any): boolean {
   if (val === null || val === undefined) return true;
   const s = String(typeof val === 'object' && val.v !== undefined ? val.v : val).trim();
   if (s === '' || s === '-' || s === '--') return true;
   const lower = s.toLowerCase();
-  return lower === 'na' || lower === 'n/a' || lower === 'null' || lower === 'undefined' || lower === 'none' || lower === '(blank)';
+  return (
+    lower === 'na' ||
+    lower === 'n/a' ||
+    lower === 'n / a' ||
+    lower === 'null' ||
+    lower === 'undefined' ||
+    lower === 'none' ||
+    lower === '(blank)' ||
+    lower === '#n/a' ||
+    lower === '#na'
+  );
 }
 
 /**
  * Normalizes a record value according to report rules:
- * - Empty / NA / null / "-" / " " values are normalized to "(blank)"
- * - Except for Enquiry Level (buckets), where blank/NA/null/"-" is normalized to "Open" per requirements
+ * - ONLY for the "Lead Level" column: blank, NA, null, "-", etc. are normalized to "Open"
+ * - For Agency Name and all other columns: blank, NA, null, "-", etc. are normalized to "(blank)"
  */
-export function normalizeRecordValue(val: any, isEnquiryLevel: boolean = false): string {
+export function normalizeRecordValue(val: any, isLeadLevel: boolean = false): string {
   if (isBlankValue(val)) {
-    return isEnquiryLevel ? 'Open' : '(blank)';
+    return isLeadLevel ? 'Open' : '(blank)';
   }
   const s = String(typeof val === 'object' && val.v !== undefined ? val.v : val).trim();
   return s;
@@ -382,13 +410,18 @@ export async function detectBucketReportFields(
             continue;
           }
 
-          const isEnquiryLevel = lowerHeader === 'enquiry level' || lowerHeader === 'ai lead level' || lowerHeader.includes('lead level') || bucketAliases.some(b => lowerHeader === b);
+          const isExactLeadLevel = lowerHeader === 'lead level' || lowerHeader === 'lead_level' || lowerHeader === 'leadlevel';
+          const isAiLeadLevel = lowerHeader === 'ai lead level' || lowerHeader === 'ai_lead_level' || lowerHeader.includes('ai lead level');
+          const isEnquiryLevel = isExactLeadLevel || lowerHeader === 'enquiry level' || lowerHeader.includes('enquiry level') || (!isAiLeadLevel && lowerHeader.includes('lead level')) || bucketAliases.some(b => lowerHeader === b);
           const values: string[] = [];
           const counts: Record<string, number> = {};
 
           for (const row of dataRows) {
             const rawVal = getCellValue(row[c]);
-            const val = normalizeRecordValue(rawVal, isEnquiryLevel);
+            let val = normalizeRecordValue(rawVal, isEnquiryLevel);
+            if (isEnquiryLevel) {
+              val = normalizeBucketCasing(val);
+            }
             values.push(val);
             counts[val] = (counts[val] || 0) + 1;
           }
@@ -429,7 +462,7 @@ export async function detectBucketReportFields(
             ['legacy ekam', 'legacy milestone', 'legacy kairos', 'aqua life', 'milestone', 'kairos', 'ekam'].includes(v.toLowerCase())
           );
 
-          if (isPresales && (lowerHeader === 'telecaller' || lowerHeader === 'caller')) {
+          if (isPresales && (lowerHeader === 'telecaller' || lowerHeader === 'caller' || lowerHeader === 'tele-caller')) {
             role = 'sales';
             roleLabel = 'Telecaller (Rows)';
             suggestedSalesColIdx = c;
@@ -439,14 +472,18 @@ export async function detectBucketReportFields(
             if (suggestedAgencyColIdx === -1 || lowerHeader === 'agency me' || lowerHeader === 'agency name') {
               suggestedAgencyColIdx = c;
             }
-          } else if (isPresales && (lowerHeader === 'ai lead level' || lowerHeader === 'lead level')) {
+          } else if (isExactLeadLevel || (isPresales && !isAiLeadLevel && lowerHeader.includes('lead level'))) {
             role = 'bucket';
-            roleLabel = 'AI Lead Level (Buckets)';
+            roleLabel = 'Lead Level (Buckets)';
             suggestedBucketColIdx = c;
-          } else if (lowerHeader === 'enquiry level' || isEnquiryLevel || hasCanonicalBucketValue) {
+          } else if (isAiLeadLevel) {
+            // User requested: "I want Lead Level to be used not AI Lead Level"
+            role = 'other';
+            roleLabel = 'AI Lead Level';
+          } else if (lowerHeader === 'enquiry level' || (!isPresales && (isEnquiryLevel || hasCanonicalBucketValue))) {
             role = 'bucket';
-            roleLabel = isPresales ? 'AI Lead Level (Buckets)' : 'Enquiry Level / Buckets (Columns)';
-            if (suggestedBucketColIdx === -1 || lowerHeader === 'ai lead level' || lowerHeader === 'enquiry level') {
+            roleLabel = isPresales ? 'Lead Level (Buckets)' : 'Enquiry Level / Buckets (Columns)';
+            if (suggestedBucketColIdx === -1 || lowerHeader === 'enquiry level') {
               suggestedBucketColIdx = c;
             }
           } else if (
@@ -550,6 +587,28 @@ export async function detectBucketReportFields(
           const cand = detectedColumns.find(col => col.role === 'sales') || detectedColumns[0];
           suggestedSalesColIdx = cand.colIndex;
         }
+
+        // Priority for Presales: Explicitly ensure 'Lead Level' (not AI Lead Level) is chosen as bucket
+        if (isPresales) {
+          const exactLeadLevelCol = detectedColumns.find(col => {
+            const h = col.headerName.toLowerCase().trim();
+            return (h === 'lead level' || h === 'lead_level' || h === 'leadlevel' || (!h.includes('ai') && h.includes('lead level')));
+          });
+          if (exactLeadLevelCol) {
+            suggestedBucketColIdx = exactLeadLevelCol.colIndex;
+            exactLeadLevelCol.role = 'bucket';
+            exactLeadLevelCol.roleLabel = 'Lead Level (Buckets)';
+            // Demote any AI Lead Level column
+            detectedColumns.forEach(col => {
+              const h = col.headerName.toLowerCase().trim();
+              if (h.includes('ai lead level') && col.colIndex !== exactLeadLevelCol.colIndex) {
+                col.role = 'other';
+                col.roleLabel = col.headerName;
+              }
+            });
+          }
+        }
+
         if (suggestedBucketColIdx === -1 && detectedColumns.length > 1) {
           const cand = detectedColumns.find(col => col.role === 'bucket' && col.colIndex !== suggestedSalesColIdx) || detectedColumns[1];
           suggestedBucketColIdx = cand.colIndex;
@@ -757,11 +816,12 @@ export async function computeBucketReportTable(
             }
           }
 
-          // Normalize bucket: blank/NA/null/- is considered Open for Enquiry Level
-          const rawBucket = normalizeRecordValue(getCellValue(row[bucketColIdx]), true);
+          // Normalize bucket: blank/NA/null/- is considered Open for Enquiry Level & Lead Level
+          let rawBucket = normalizeRecordValue(getCellValue(row[bucketColIdx]), true);
+          rawBucket = normalizeBucketCasing(rawBucket);
 
           // Match bucket case-insensitively or normalized
-          const matchedBucket = selectedBuckets.find(b => b.toLowerCase() === rawBucket.toLowerCase());
+          const matchedBucket = selectedBuckets.find(b => b.toLowerCase().trim() === rawBucket.toLowerCase().trim());
           if (matchedBucket) {
             if (!userBucketMap[matchedUser]) {
               userBucketMap[matchedUser] = {};
