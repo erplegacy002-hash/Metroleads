@@ -6,11 +6,12 @@ import { GeneratedImage, ProcessResponse } from '../types';
 import { USER_PROJECT_MAPPING, USER_TEAM_MAPPING } from './projectMapping';
 
 // Canonical bucket list matching required format for Lead Levels and Enquiry Levels:
-// Open, Site Visit Scheduled, Site Visited, Cold, Warm, Hot, Discard, Booked
+// Open, Site Visit Scheduled, Site Visited, Revisited, Cold, Warm, Hot, Discard, Booked
 export const DEFAULT_BUCKET_LIST = [
   'Open',
   'Site Visit Scheduled',
   'Site Visited',
+  'Revisited',
   'Cold',
   'Warm',
   'Hot',
@@ -22,6 +23,7 @@ export const DEFAULT_PRESALES_BUCKET_LIST = [
   'Open',
   'Site Visit Scheduled',
   'Site Visited',
+  'Revisited',
   'Cold',
   'Warm',
   'Hot',
@@ -39,6 +41,10 @@ export function normalizeBucketCasing(val: string): string {
     'visit scheduled': 'Site Visit Scheduled',
     'scheduled': 'Site Visit Scheduled',
     'visited': 'Site Visited',
+    'revisited': 'Revisited',
+    're-visited': 'Revisited',
+    're visit': 'Revisited',
+    're-visit': 'Revisited',
     'cold': 'Cold',
     'warm': 'Warm',
     'hot': 'Hot',
@@ -47,9 +53,7 @@ export function normalizeBucketCasing(val: string): string {
     'junk': 'Discard',
     'lost': 'Discard',
     'booked': 'Booked',
-    'booking': 'Booked',
-    'revisited': 'Revisited',
-    're-visited': 'Revisited'
+    'booking': 'Booked'
   };
   return canonicalMap[lower] || (trimmed.length > 0 ? (trimmed.charAt(0).toUpperCase() + trimmed.slice(1)) : trimmed);
 }
@@ -938,7 +942,7 @@ export async function computeBucketReportTable(
             grandTotal,
             bucketCounts: counts
           };
-        });
+        }).filter(r => r.grandTotal > 0);
 
         // Compute Column Totals
         let overallGrandTotal = 0;
