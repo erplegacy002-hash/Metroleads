@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Loader2, Download, AlertCircle, FileText, MapPin, CalendarRange, CalendarDays, Calendar, Users, Layers, Sparkles, ExternalLink, ArrowLeft } from 'lucide-react';
+import { Loader2, Download, AlertCircle, FileText, MapPin, CalendarRange, CalendarDays, Calendar, Users, Layers, Sparkles, ExternalLink, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import FileUpload from './components/FileUpload';
+import DualFileUpload from './components/DualFileUpload';
 import ImageGallery from './components/ImageGallery';
 import { ProcessResponse } from './types';
 import { processFile } from './utils/clientProcessor';
@@ -25,17 +26,25 @@ type AppPage = 'main' | 'metroleads';
 
 export const BUCKET_REPORT_SALES = 'Bucket Report - Site Visits (Sales)';
 export const BUCKET_REPORT_PRESALES = 'Bucket Report - Leads (Presales)';
+export const BUCKET_REPORT_PRESALES_VISITS = 'Bucket Report - Leads (Presales) - Visits Done';
 
 const MAIN_PAGE_TABS = [
   { id: BUCKET_REPORT_SALES, label: 'Bucket Report - Site Visits (Sales)', icon: Layers },
   { id: BUCKET_REPORT_PRESALES, label: 'Bucket Report - Leads (Presales)', icon: Users },
+  { id: BUCKET_REPORT_PRESALES_VISITS, label: 'Bucket Report - Leads (Presales) - Visits Done', icon: Users },
 ];
 
 export const isBucketReportTab = (tab: string) => 
-  tab === BUCKET_REPORT_SALES || tab === BUCKET_REPORT_PRESALES || tab === 'Bucket Report';
+  tab === BUCKET_REPORT_SALES || 
+  tab === BUCKET_REPORT_PRESALES || 
+  tab === BUCKET_REPORT_PRESALES_VISITS || 
+  tab === 'Bucket Report';
 
-export const getBucketReportType = (tab: string): 'sales' | 'presales' => 
-  tab === BUCKET_REPORT_PRESALES ? 'presales' : 'sales';
+export const getBucketReportType = (tab: string): 'sales' | 'presales' | 'presales_visits' => {
+  if (tab === BUCKET_REPORT_PRESALES_VISITS) return 'presales_visits';
+  if (tab === BUCKET_REPORT_PRESALES) return 'presales';
+  return 'sales';
+};
 
 const METROLEADS_TABS = [
   { id: 'Daily Report Processor', label: 'Daily Report Processor', icon: FileText },
@@ -64,6 +73,7 @@ const App: React.FC = () => {
     return BUCKET_REPORT_SALES;
   });
   const [file, setFile] = useState<File | null>(null);
+  const [visitsFile, setVisitsFile] = useState<File | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ProcessResponse | null>(null);
@@ -114,6 +124,7 @@ const App: React.FC = () => {
   const navigateTo = (page: AppPage) => {
     setCurrentPage(page);
     setFile(null);
+    setVisitsFile(null);
     setFiles([]);
     setResult(null);
     setError(null);
@@ -224,6 +235,9 @@ const App: React.FC = () => {
       
       if (isBucketReportTab(activeTab)) {
         if (!file) throw new Error("Please upload an Excel file to process.");
+        if (activeTab === BUCKET_REPORT_PRESALES_VISITS && !visitsFile) {
+          throw new Error("Both Leads Excel and Visits Excel are mandatory. Please upload both files to generate this report.");
+        }
         if (!bucketAnalysis) throw new Error("Scanning file columns. Please wait a moment and try again.");
         const reportType = getBucketReportType(activeTab);
         data = await processBucketSiteVisitFile(file, {
@@ -236,7 +250,8 @@ const App: React.FC = () => {
           reportTitle: bucketReportTitle || bucketAnalysis.defaultTitle,
           headerIndex: bucketAnalysis.headerIndex,
           reportType,
-          dimensionLabel: reportType === 'presales' ? 'Telecaller' : 'Sales'
+          dimensionLabel: reportType === 'sales' ? 'Sales' : 'Telecaller',
+          visitsFile: activeTab === BUCKET_REPORT_PRESALES_VISITS ? visitsFile : null
         });
       } else if (activeTab === 'Monthly Site Visit Report') {
         data = await processMonthlyFile(file!, startDate, endDate, selectedSource);
@@ -279,6 +294,7 @@ const App: React.FC = () => {
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId);
     setFile(null);
+    setVisitsFile(null);
     setFiles([]);
     setResult(null);
     setError(null);
@@ -299,6 +315,7 @@ const App: React.FC = () => {
     if (isBucketReportTab(tabId)) {
       setStartDate('');
       setEndDate('');
+      setVisitsFile(null);
       setBucketAnalysis(null);
       setBucketReportTitle('');
       setSelectedSalesColIdx(-1);
@@ -489,6 +506,8 @@ const App: React.FC = () => {
               <p className="text-lg text-slate-600 max-w-2xl mx-auto font-serif italic opacity-80">
                 {activeTab === BUCKET_REPORT_SALES
                   ? 'Dynamic Bucket report for Site Visits (Sales), detecting categorical columns with multiselect records and custom report title.'
+                  : activeTab === BUCKET_REPORT_PRESALES_VISITS
+                    ? 'Dynamic Bucket report for Leads (Presales) with Visits Done counted using mobile numbers and revisit date rules.'
                   : activeTab === BUCKET_REPORT_PRESALES
                     ? 'Dynamic Bucket report for Leads (Presales), detecting caller/presales columns with multiselect records and custom report title.'
                     : activeTab === 'Monthly Site Visit Report' 
@@ -560,14 +579,24 @@ const App: React.FC = () => {
             )}
 
             {/* Upload Section */}
-            <FileUpload 
-              onFileSelect={setFile} 
-              selectedFile={file} 
-              onFilesSelect={setFiles}
-              selectedFiles={files}
-              multiple={activeTab === 'User Wise Site Visit Report' || activeTab === 'Monthly CP Visits Report' || activeTab === 'User Performance Report'}
-              disabled={isLoading} 
-            />
+            {activeTab === BUCKET_REPORT_PRESALES_VISITS ? (
+              <DualFileUpload
+                leadsFile={file}
+                onLeadsFileSelect={setFile}
+                visitsFile={visitsFile}
+                onVisitsFileSelect={setVisitsFile}
+                disabled={isLoading}
+              />
+            ) : (
+              <FileUpload 
+                onFileSelect={setFile} 
+                selectedFile={file} 
+                onFilesSelect={setFiles}
+                selectedFiles={files}
+                multiple={activeTab === 'User Wise Site Visit Report' || activeTab === 'Monthly CP Visits Report' || activeTab === 'User Performance Report'}
+                disabled={isLoading} 
+              />
+            )}
 
             {/* Bucket Report Scanning State */}
             {isBucketReportTab(activeTab) && isAnalyzingBucketFile && (
@@ -582,6 +611,7 @@ const App: React.FC = () => {
               <BucketReportConfig
                 analysis={bucketAnalysis}
                 file={file}
+                visitsFile={activeTab === BUCKET_REPORT_PRESALES_VISITS ? visitsFile : null}
                 reportTitle={bucketReportTitle}
                 onReportTitleChange={setBucketReportTitle}
                 selectedSalesColIdx={selectedSalesColIdx}
@@ -684,10 +714,24 @@ const App: React.FC = () => {
 
               <button
                 onClick={handleProcess}
-                disabled={((['User Wise Site Visit Report', 'Monthly CP Visits Report', 'User Performance Report'].includes(activeTab)) ? files.length === 0 : !file) || isLoading}
+                disabled={
+                  isLoading ||
+                  (activeTab === BUCKET_REPORT_PRESALES_VISITS
+                    ? (!file || !visitsFile)
+                    : (['User Wise Site Visit Report', 'Monthly CP Visits Report', 'User Performance Report'].includes(activeTab))
+                      ? files.length === 0
+                      : !file)
+                }
                 className={`
                   flex items-center space-x-3 px-10 py-4 rounded-none font-bold text-lg tracking-wider shadow-md transition-all border
-                  ${((['User Wise Site Visit Report', 'Monthly CP Visits Report', 'User Performance Report'].includes(activeTab)) ? files.length === 0 : !file) || isLoading
+                  ${(
+                    isLoading ||
+                    (activeTab === BUCKET_REPORT_PRESALES_VISITS
+                      ? (!file || !visitsFile)
+                      : (['User Wise Site Visit Report', 'Monthly CP Visits Report', 'User Performance Report'].includes(activeTab))
+                        ? files.length === 0
+                        : !file)
+                  )
                     ? 'bg-slate-300 text-slate-500 border-slate-300 cursor-not-allowed' 
                     : 'bg-[#1a1a1a] text-[#d4af37] border-[#d4af37] hover:bg-black hover:shadow-xl hover:scale-105'}
                 `}
@@ -718,9 +762,13 @@ const App: React.FC = () => {
                     download={
                       activeTab === 'User Performance Report' 
                         ? 'user_performance_report.zip' 
-                        : isBucketReportTab(activeTab)
-                          ? (activeTab === BUCKET_REPORT_PRESALES ? 'bucket_leads_presales_report.zip' : 'bucket_site_visit_sales_report.zip')
-                          : 'project_reports.zip'
+                        : activeTab === BUCKET_REPORT_PRESALES_VISITS
+                          ? 'bucket_leads_presales_visits_done_report.zip'
+                          : activeTab === BUCKET_REPORT_PRESALES
+                            ? 'bucket_leads_presales_report.zip'
+                            : isBucketReportTab(activeTab)
+                              ? 'bucket_site_visit_sales_report.zip'
+                              : 'project_reports.zip'
                     }
                     className="flex items-center space-x-2 bg-[#d4af37] text-black px-6 py-2.5 rounded-sm hover:bg-[#c5a028] transition-colors shadow-sm font-bold text-sm uppercase tracking-wide"
                   >

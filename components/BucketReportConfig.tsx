@@ -25,6 +25,7 @@ import {
 interface BucketReportConfigProps {
   analysis: BucketReportAnalysis;
   file: File;
+  visitsFile?: File | null;
   reportTitle: string;
   onReportTitleChange: (title: string) => void;
   selectedSalesColIdx: number;
@@ -40,12 +41,13 @@ interface BucketReportConfigProps {
   columnFilters: Record<number, string[]>;
   onColumnFiltersChange: (filters: Record<number, string[]>) => void;
   onResetToDefaultTitle: () => void;
-  reportType?: 'sales' | 'presales';
+  reportType?: 'sales' | 'presales' | 'presales_visits';
 }
 
 const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
   analysis,
   file,
+  visitsFile = null,
   reportTitle,
   onReportTitleChange,
   selectedSalesColIdx,
@@ -63,7 +65,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
   onResetToDefaultTitle,
   reportType = 'sales',
 }) => {
-  const isPresales = reportType === 'presales';
+  const isPresales = reportType === 'presales' || reportType === 'presales_visits';
   const [openDropdownColIdx, setOpenDropdownColIdx] = useState<number | null>(null);
   const [searchTerms, setSearchTerms] = useState<Record<number, string>>({});
   const [previewSummary, setPreviewSummary] = useState<BucketTableSummary | null>(null);
@@ -97,7 +99,8 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
       reportTitle: reportTitle || analysis.defaultTitle,
       headerIndex: analysis.headerIndex,
       reportType,
-      dimensionLabel: isPresales ? 'Telecaller' : 'Sales'
+      dimensionLabel: isPresales ? 'Telecaller' : 'Sales',
+      visitsFile: visitsFile || null
     })
       .then(summary => {
         if (isMounted) {
@@ -115,6 +118,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
     };
   }, [
     file,
+    visitsFile,
     selectedSalesColIdx,
     selectedBucketColIdx,
     selectedAgencyColIdx,
@@ -502,7 +506,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                   {/* Row 1: Merged Title matching image */}
                   <tr>
                     <th 
-                      colSpan={2 + previewSummary.buckets.length} 
+                      colSpan={2 + previewSummary.buckets.length + (previewSummary.hasVisitsDone ? 1 : 0)} 
                       className="border border-black px-3 py-2 text-center font-bold text-black bg-white tracking-wide text-sm sm:text-base"
                     >
                       {previewSummary.reportTitle}
@@ -521,6 +525,11 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                         {b}
                       </th>
                     ))}
+                    {previewSummary.hasVisitsDone && (
+                      <th className="border border-black border-l-[3px] border-l-black px-3 py-1.5 text-center font-bold text-black bg-slate-100 whitespace-nowrap">
+                        Visits Done
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -540,6 +549,11 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                                 {row.bucketCounts[b] || 0}
                               </td>
                             ))}
+                            {previewSummary.hasVisitsDone && (
+                              <td className="border border-black border-l-[3px] border-l-black px-3 py-1.5 text-center font-bold text-black bg-slate-100/70">
+                                {row.visitsDone ?? 0}
+                              </td>
+                            )}
                           </tr>
                           {row.subRows.map(sub => (
                             <tr key={`${row.salesUser}-${sub.agency}`} className="hover:bg-slate-50/50">
@@ -554,6 +568,11 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                                   {sub.bucketCounts[b] || 0}
                                 </td>
                               ))}
+                              {previewSummary.hasVisitsDone && (
+                                <td className="border border-black border-l-[3px] border-l-black px-3 py-1 text-center font-normal text-slate-800 bg-slate-50/40">
+                                  {sub.visitsDone ?? 0}
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </React.Fragment>
@@ -573,6 +592,11 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                             {row.bucketCounts[b] || 0}
                           </td>
                         ))}
+                        {previewSummary.hasVisitsDone && (
+                          <td className="border border-black border-l-[3px] border-l-black px-3 py-1.5 text-center font-normal text-black bg-slate-50/40">
+                            {row.visitsDone ?? 0}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -589,6 +613,11 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                         {previewSummary.columnTotals.bucketTotals[b] || 0}
                       </td>
                     ))}
+                    {previewSummary.hasVisitsDone && (
+                      <td className="border border-black border-l-[3px] border-l-black px-3 py-1.5 text-center font-bold text-black bg-slate-200/80">
+                        {previewSummary.columnTotals.visitsDoneTotal ?? 0}
+                      </td>
+                    )}
                   </tr>
                 </tbody>
               </table>
