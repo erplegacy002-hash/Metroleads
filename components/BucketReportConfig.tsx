@@ -11,10 +11,13 @@ import {
   Eye, 
   Calendar,
   Sparkles,
-  Info
+  Info,
+  FileSpreadsheet,
+  Loader2
 } from 'lucide-react';
 import { 
   BucketReportAnalysis, 
+  VisitsReportAnalysis,
   computeBucketReportTable, 
   BucketTableSummary, 
   DEFAULT_BUCKET_LIST,
@@ -26,6 +29,10 @@ interface BucketReportConfigProps {
   analysis: BucketReportAnalysis;
   file: File;
   visitsFile?: File | null;
+  visitsAnalysis?: VisitsReportAnalysis | null;
+  isAnalyzingVisitsFile?: boolean;
+  visitsColumnFilters?: Record<number, string[]>;
+  onVisitsColumnFiltersChange?: (filters: Record<number, string[]>) => void;
   reportTitle: string;
   onReportTitleChange: (title: string) => void;
   selectedSalesColIdx: number;
@@ -48,6 +55,10 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
   analysis,
   file,
   visitsFile = null,
+  visitsAnalysis = null,
+  isAnalyzingVisitsFile = false,
+  visitsColumnFilters = {},
+  onVisitsColumnFiltersChange,
   reportTitle,
   onReportTitleChange,
   selectedSalesColIdx,
@@ -66,8 +77,10 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
   reportType = 'sales',
 }) => {
   const isPresales = reportType === 'presales' || reportType === 'presales_visits';
-  const [openDropdownColIdx, setOpenDropdownColIdx] = useState<number | null>(null);
-  const [searchTerms, setSearchTerms] = useState<Record<number, string>>({});
+  const isPresalesVisits = reportType === 'presales_visits';
+
+  const [openDropdownKey, setOpenDropdownKey] = useState<string | null>(null);
+  const [searchTerms, setSearchTerms] = useState<Record<string, string>>({});
   const [previewSummary, setPreviewSummary] = useState<BucketTableSummary | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
@@ -77,14 +90,14 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setOpenDropdownColIdx(null);
+        setOpenDropdownKey(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Update live preview whenever filters, buckets, sales users, agency, or title change
+  // Update live preview whenever filters, buckets, sales users, agency, visitsFile, visitsColumnFilters, or title change
   useEffect(() => {
     let isMounted = true;
     setIsPreviewLoading(true);
@@ -100,7 +113,8 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
       headerIndex: analysis.headerIndex,
       reportType,
       dimensionLabel: isPresales ? 'Telecaller' : 'Sales',
-      visitsFile: visitsFile || null
+      visitsFile: visitsFile || null,
+      visitsColumnFilters
     })
       .then(summary => {
         if (isMounted) {
@@ -119,6 +133,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
   }, [
     file,
     visitsFile,
+    visitsColumnFilters,
     selectedSalesColIdx,
     selectedBucketColIdx,
     selectedAgencyColIdx,
@@ -132,7 +147,22 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
     isPresales
   ]);
 
-  const toggleValueForColumn = (colIdx: number, val: string) => {
+  // --- Leads Excel Filter Helpers ---
+  const getSelectedValuesForLeadsCol = (colIdx: number): string[] => {
+    if (colIdx === selectedSalesColIdx) {
+      return selectedSalesUsers;
+    }
+    if (colIdx === selectedBucketColIdx) {
+      return selectedBuckets;
+    }
+    const col = analysis.detectedColumns.find(c => c.colIndex === colIdx);
+    if (!columnFilters[colIdx] || columnFilters[colIdx].length === 0) {
+      return col ? col.uniqueValues : [];
+    }
+    return columnFilters[colIdx];
+  };
+
+  const toggleLeadsValue = (colIdx: number, val: string) => {
     if (colIdx === selectedSalesColIdx) {
       if (selectedSalesUsers.includes(val)) {
         onSelectedSalesUsersChange(selectedSalesUsers.filter(u => u !== val));
@@ -147,22 +177,24 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
         onSelectedBucketsChange([...selectedBuckets, val]);
       }
     } else {
-      const current = columnFilters[colIdx] || [];
-      if (current.includes(val)) {
-        onColumnFiltersChange({
-          ...columnFilters,
-          [colIdx]: current.filter(item => item !== val)
-        });
-      } else {
-        onColumnFiltersChange({
-          ...columnFilters,
-          [colIdx]: [...current, val]
-        });
-      }
+      const col = analysis.detectedColumns.find(c => c.colIndex === colIdx);
+      const allVals = col ? col.uniqueValues : [];
+      const current = columnFilters[colIdx] && columnFilters[colIdx].length > 0
+        ? columnFilters[colIdx]
+        : [...allVals];
+
+      const updated = current.includes(val)
+        ? current.filter(item => item !== val)
+        : [...current, val];
+
+      onColumnFiltersChange({
+        ...columnFilters,
+        [colIdx]: updated
+      });
     }
   };
 
-  const selectAllForColumn = (colIdx: number, allVals: string[]) => {
+  const selectAllLeadsCol = (colIdx: number, allVals: string[]) => {
     if (colIdx === selectedSalesColIdx) {
       onSelectedSalesUsersChange(allVals);
     } else if (colIdx === selectedBucketColIdx) {
@@ -176,7 +208,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
     }
   };
 
-  const deselectAllForColumn = (colIdx: number) => {
+  const deselectAllLeadsCol = (colIdx: number) => {
     if (colIdx === selectedSalesColIdx) {
       onSelectedSalesUsersChange([]);
     } else if (colIdx === selectedBucketColIdx) {
@@ -189,14 +221,47 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
     }
   };
 
-  const getSelectedValuesForCol = (colIdx: number): string[] => {
-    if (colIdx === selectedSalesColIdx) {
-      return selectedSalesUsers;
+  // --- Visits Excel Filter Helpers ---
+  const getSelectedValuesForVisitsCol = (colIdx: number): string[] => {
+    const col = visitsAnalysis?.detectedColumns.find(c => c.colIndex === colIdx);
+    if (!visitsColumnFilters || !visitsColumnFilters[colIdx] || visitsColumnFilters[colIdx].length === 0) {
+      return col ? col.uniqueValues : [];
     }
-    if (colIdx === selectedBucketColIdx) {
-      return selectedBuckets;
-    }
-    return columnFilters[colIdx] || [];
+    return visitsColumnFilters[colIdx];
+  };
+
+  const toggleVisitsValue = (colIdx: number, val: string) => {
+    if (!onVisitsColumnFiltersChange) return;
+    const col = visitsAnalysis?.detectedColumns.find(c => c.colIndex === colIdx);
+    const allVals = col ? col.uniqueValues : [];
+    const current = visitsColumnFilters && visitsColumnFilters[colIdx] && visitsColumnFilters[colIdx].length > 0
+      ? visitsColumnFilters[colIdx]
+      : [...allVals];
+
+    const updated = current.includes(val)
+      ? current.filter(item => item !== val)
+      : [...current, val];
+
+    onVisitsColumnFiltersChange({
+      ...visitsColumnFilters,
+      [colIdx]: updated
+    });
+  };
+
+  const selectAllVisitsCol = (colIdx: number, allVals: string[]) => {
+    if (!onVisitsColumnFiltersChange) return;
+    onVisitsColumnFiltersChange({
+      ...visitsColumnFilters,
+      [colIdx]: allVals
+    });
+  };
+
+  const deselectAllVisitsCol = (colIdx: number) => {
+    if (!onVisitsColumnFiltersChange) return;
+    onVisitsColumnFiltersChange({
+      ...visitsColumnFilters,
+      [colIdx]: []
+    });
   };
 
   return (
@@ -232,20 +297,34 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
         </div>
       </div>
 
-      {/* 2. Detected Columns Having Most Records as Same */}
+      {/* 2. Leads Excel Configuration & Filters */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-sm">
-        <div className="border-b border-slate-100 pb-4 mb-5">
-          <h3 className="text-lg font-serif font-bold text-slate-900 flex items-center gap-2">
-            <Layers className="w-5 h-5 text-[#d4af37]" />
-            Detected Fields with Categorical Records
-          </h3>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            The system detected the following columns having repeated/matching records. Use the multiselect dropdowns below to select which records to include in the generated report.
-          </p>
+        <div className="border-b border-slate-100 pb-4 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-lg font-serif font-bold text-slate-900 flex items-center gap-2">
+              <Layers className="w-5 h-5 text-[#d4af37]" />
+              {isPresalesVisits ? '1. Leads Excel — Configuration & Filters' : 'Detected Fields with Categorical Records'}
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              {isPresalesVisits 
+                ? 'Configure telecallers, agencies, lead levels, and column filters (including Project Name) for the Leads Excel.'
+                : 'Select the dimension columns and use the multiselect dropdowns below to include/exclude specific records.'}
+            </p>
+          </div>
+          {Object.keys(columnFilters).length > 0 && (
+            <button
+              type="button"
+              onClick={() => onColumnFiltersChange({})}
+              className="text-xs font-semibold text-amber-700 hover:text-amber-800 flex items-center gap-1.5 self-start sm:self-auto py-1 px-2.5 rounded bg-amber-50 hover:bg-amber-100 transition-colors border border-amber-200"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset Leads Filters
+            </button>
+          )}
         </div>
 
-        {/* Primary Role Mapping Controls */}
-        <div className={`grid grid-cols-1 ${isPresales ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4 mb-6 p-4 bg-amber-50/40 border border-amber-200/60 rounded-lg`}>
+        {/* Dimension Selectors */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 p-4 bg-slate-50/70 border border-slate-200/80 rounded-lg">
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <Users className="w-4 h-4 text-slate-600" />
@@ -330,15 +409,17 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
           </div>
         </div>
 
-        {/* Detected Columns Grid with Multiselect Dropdowns */}
+        {/* Leads Excel Detected Columns Grid with Multiselect Dropdowns */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {analysis.detectedColumns.map(col => {
             const isSales = col.colIndex === selectedSalesColIdx;
             const isAgency = col.colIndex === selectedAgencyColIdx;
             const isBucket = col.colIndex === selectedBucketColIdx;
-            const selectedVals = getSelectedValuesForCol(col.colIndex);
-            const isOpen = openDropdownColIdx === col.colIndex;
-            const term = searchTerms[col.colIndex] || '';
+            const isProject = col.role === 'project' || col.headerName.toLowerCase().includes('project');
+            const selectedVals = getSelectedValuesForLeadsCol(col.colIndex);
+            const dropdownKey = `leads-${col.colIndex}`;
+            const isOpen = openDropdownKey === dropdownKey;
+            const term = searchTerms[dropdownKey] || '';
 
             const availableVals = isBucket 
               ? col.uniqueValues.filter(v => v.toLowerCase() !== '(blank)' && !isBlankValue(v))
@@ -359,16 +440,16 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
             } else if (isBucket) {
               roleBadge = isPresales ? 'Lead Level' : 'Bucket Columns';
               roleBadgeColor = 'bg-amber-100 text-amber-900 border-amber-300 font-semibold';
-            } else if (col.role === 'project') {
-              roleBadge = 'Project Filter';
-              roleBadgeColor = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+            } else if (isProject) {
+              roleBadge = 'Project Filter (Leads)';
+              roleBadgeColor = 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold';
             }
 
             return (
               <div 
-                key={col.colIndex}
+                key={dropdownKey}
                 className={`relative border rounded-lg p-3.5 bg-white transition-all ${
-                  isOpen ? 'ring-2 ring-[#d4af37] border-transparent shadow-md' : 'border-slate-200 hover:border-slate-300'
+                  isOpen ? 'ring-2 ring-[#d4af37] border-transparent shadow-md' : isProject ? 'border-emerald-300 bg-emerald-50/10 hover:border-emerald-400' : 'border-slate-200 hover:border-slate-300'
                 }`}
               >
                 {/* Field Header */}
@@ -389,7 +470,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                 {/* Multiselect Trigger Button */}
                 <button
                   type="button"
-                  onClick={() => setOpenDropdownColIdx(isOpen ? null : col.colIndex)}
+                  onClick={() => setOpenDropdownKey(isOpen ? null : dropdownKey)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-slate-800 font-medium transition-colors"
                 >
                   <span className="truncate">
@@ -412,7 +493,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                         type="text"
                         placeholder="Filter records..."
                         value={term}
-                        onChange={(e) => setSearchTerms({ ...searchTerms, [col.colIndex]: e.target.value })}
+                        onChange={(e) => setSearchTerms({ ...searchTerms, [dropdownKey]: e.target.value })}
                         className="w-full pl-8 pr-2 py-1.5 text-xs border border-slate-200 rounded focus:ring-1 focus:ring-[#d4af37] focus:border-[#d4af37]"
                       />
                     </div>
@@ -425,7 +506,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                       <div className="space-x-2">
                         <button
                           type="button"
-                          onClick={() => selectAllForColumn(col.colIndex, col.uniqueValues)}
+                          onClick={() => selectAllLeadsCol(col.colIndex, col.uniqueValues)}
                           className="text-[11px] font-bold text-amber-700 hover:text-amber-800 hover:underline"
                         >
                           Select All
@@ -433,7 +514,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                         <span className="text-slate-300">|</span>
                         <button
                           type="button"
-                          onClick={() => deselectAllForColumn(col.colIndex)}
+                          onClick={() => deselectAllLeadsCol(col.colIndex)}
                           className="text-[11px] font-bold text-slate-500 hover:text-slate-700 hover:underline"
                         >
                           Clear
@@ -462,7 +543,7 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
                                 <input
                                   type="checkbox"
                                   checked={isChecked}
-                                  onChange={() => toggleValueForColumn(col.colIndex, val)}
+                                  onChange={() => toggleLeadsValue(col.colIndex, val)}
                                   className="h-3.5 w-3.5 rounded border-slate-300 text-[#d4af37] focus:ring-[#d4af37]"
                                 />
                                 <span className="truncate">{val}</span>
@@ -483,21 +564,199 @@ const BucketReportConfig: React.FC<BucketReportConfigProps> = ({
         </div>
       </div>
 
-      {/* 3. Live Interactive Preview of Report Format */}
+      {/* 3. Visits Excel Filters & Project Selection (For presales_visits) */}
+      {isPresalesVisits && (
+        <div className="bg-white border-2 border-blue-200/90 rounded-xl p-5 sm:p-6 shadow-sm">
+          <div className="border-b border-blue-100 pb-4 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-lg font-serif font-bold text-slate-900 flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-blue-600" />
+                2. Visits Excel — Filters & Project Selection (for "Visits Done")
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Filter which visits from the Visits Excel are counted in the <strong>Visits Done</strong> column by <strong>Project Name</strong>, <strong>Visit Source</strong>, <strong>Sales Executive</strong>, etc.
+              </p>
+            </div>
+            {onVisitsColumnFiltersChange && visitsColumnFilters && Object.keys(visitsColumnFilters).length > 0 && (
+              <button
+                type="button"
+                onClick={() => onVisitsColumnFiltersChange({})}
+                className="text-xs font-semibold text-blue-700 hover:text-blue-800 flex items-center gap-1.5 self-start sm:self-auto py-1 px-2.5 rounded bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-200"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset Visits Filters
+              </button>
+            )}
+          </div>
+
+          {isAnalyzingVisitsFile ? (
+            <div className="flex items-center justify-center space-x-3 py-8 text-blue-700 bg-blue-50/50 rounded-lg">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+              <span className="text-xs font-semibold">Scanning Visits Excel columns, project records, and filters...</span>
+            </div>
+          ) : visitsAnalysis && visitsAnalysis.detectedColumns.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {visitsAnalysis.detectedColumns.map(col => {
+                const isProject = col.role === 'project' || col.headerName.toLowerCase().includes('project');
+                const selectedVals = getSelectedValuesForVisitsCol(col.colIndex);
+                const dropdownKey = `visits-${col.colIndex}`;
+                const isOpen = openDropdownKey === dropdownKey;
+                const term = searchTerms[dropdownKey] || '';
+
+                const filteredVals = col.uniqueValues.filter(v =>
+                  v.toLowerCase().includes(term.toLowerCase())
+                );
+
+                let roleBadge = 'Visits Filter';
+                let roleBadgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
+                if (isProject) {
+                  roleBadge = 'Project Filter (Visits)';
+                  roleBadgeColor = 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold';
+                } else if (col.role === 'source') {
+                  roleBadge = 'Visit Source';
+                  roleBadgeColor = 'bg-amber-50 text-amber-800 border-amber-200';
+                } else if (col.role === 'sales') {
+                  roleBadge = 'Sales Executive';
+                  roleBadgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
+                }
+
+                return (
+                  <div
+                    key={dropdownKey}
+                    className={`relative border rounded-lg p-3.5 bg-white transition-all ${
+                      isOpen ? 'ring-2 ring-blue-500 border-transparent shadow-md' : isProject ? 'border-emerald-300 bg-emerald-50/10 hover:border-emerald-400' : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    {/* Header */}
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <span className="text-xs font-bold text-slate-900 block truncate" title={col.headerName}>
+                          {col.headerName}
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          {col.totalCount} records • {col.uniqueValues.length} distinct
+                        </span>
+                      </div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border shrink-0 ${roleBadgeColor}`}>
+                        {roleBadge}
+                      </span>
+                    </div>
+
+                    {/* Trigger */}
+                    <button
+                      type="button"
+                      onClick={() => setOpenDropdownKey(isOpen ? null : dropdownKey)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-slate-800 font-medium transition-colors"
+                    >
+                      <span className="truncate">
+                        {selectedVals.length === 0
+                          ? 'None selected (0)'
+                          : selectedVals.length === col.uniqueValues.length
+                            ? `All (${selectedVals.length}) selected`
+                            : `${selectedVals.length} of ${col.uniqueValues.length} selected`}
+                      </span>
+                      <ChevronsUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1.5" />
+                    </button>
+
+                    {/* Dropdown panel */}
+                    {isOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-300 rounded-lg shadow-xl z-50 p-3 animate-in fade-in duration-150">
+                        <div className="relative mb-2">
+                          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Filter records..."
+                            value={term}
+                            onChange={(e) => setSearchTerms({ ...searchTerms, [dropdownKey]: e.target.value })}
+                            className="w-full pl-8 pr-2 py-1.5 text-xs border border-slate-200 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2">
+                          <span className="text-[11px] font-semibold text-slate-500">
+                            {selectedVals.length} / {col.uniqueValues.length} selected
+                          </span>
+                          <div className="space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => selectAllVisitsCol(col.colIndex, col.uniqueValues)}
+                              className="text-[11px] font-bold text-blue-700 hover:text-blue-800 hover:underline"
+                            >
+                              Select All
+                            </button>
+                            <span className="text-slate-300">|</span>
+                            <button
+                              type="button"
+                              onClick={() => deselectAllVisitsCol(col.colIndex)}
+                              className="text-[11px] font-bold text-slate-500 hover:text-slate-700 hover:underline"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="max-h-48 overflow-y-auto space-y-1 pr-1 scrollbar-thin text-xs">
+                          {filteredVals.length === 0 ? (
+                            <div className="py-3 text-center text-slate-400 text-xs italic">
+                              No matching records
+                            </div>
+                          ) : (
+                            filteredVals.map(val => {
+                              const isChecked = selectedVals.includes(val);
+                              const count = col.valueCounts[val] || 0;
+                              return (
+                                <label
+                                  key={val}
+                                  className={`flex items-center justify-between px-2 py-1.5 rounded cursor-pointer transition-colors ${
+                                    isChecked ? 'bg-blue-50/70 font-semibold text-slate-900' : 'hover:bg-slate-50 text-slate-600'
+                                  }`}
+                                >
+                                  <div className="flex items-center space-x-2 truncate">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => toggleVisitsValue(col.colIndex, val)}
+                                      className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span className="truncate">{val}</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 px-1.5 py-0.5 bg-slate-100 rounded shrink-0 ml-2">
+                                    {count}
+                                  </span>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-4 bg-blue-50/50 border border-dashed border-blue-200 rounded-lg text-center text-xs text-blue-700">
+              Upload the Visits Excel file above to configure its project selection and column filters.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 4. Live Interactive Preview of Report Format */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-sm overflow-hidden">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-100 pb-3 mb-4">
           <div className="flex items-center gap-2">
             <Eye className="w-5 h-5 text-[#d4af37]" />
             <h4 className="text-base font-serif font-bold text-slate-900">
-              Live Report Preview (Matches Report Output Format)
+              Live Report Preview (Matches Output Image, PDF & Excel)
             </h4>
           </div>
           <span className="text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full font-medium">
-            {previewSummary ? `${previewSummary.rows.length} Sales Executives • ${previewSummary.buckets.length} Buckets` : 'Updating...'}
+            {previewSummary ? `${previewSummary.rows.length} ${isPresales ? 'Telecallers' : 'Sales Executives'} • ${previewSummary.buckets.length} Buckets` : 'Updating...'}
           </span>
         </div>
 
-        {/* Styled Table matching image.png */}
+        {/* Styled Table matching image design */}
         <div className="overflow-x-auto pb-2">
           {previewSummary && previewSummary.rows.length > 0 ? (
             <div className="inline-block min-w-full align-middle">

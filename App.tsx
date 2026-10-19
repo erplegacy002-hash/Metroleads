@@ -16,9 +16,11 @@ import { processUserPerformanceFile, detectUsersFromFiles } from './utils/userPe
 import { 
   processBucketSiteVisitFile, 
   detectBucketReportFields, 
+  detectVisitsReportFields,
   getDefaultWeekRange, 
   formatToDDMMYYYY, 
-  BucketReportAnalysis 
+  BucketReportAnalysis,
+  VisitsReportAnalysis
 } from './utils/bucketSiteVisitProcessor';
 import BucketReportConfig from './components/BucketReportConfig';
 
@@ -93,6 +95,8 @@ const App: React.FC = () => {
   // Bucket Report states
   const [bucketAnalysis, setBucketAnalysis] = useState<BucketReportAnalysis | null>(null);
   const [isAnalyzingBucketFile, setIsAnalyzingBucketFile] = useState(false);
+  const [visitsAnalysis, setVisitsAnalysis] = useState<VisitsReportAnalysis | null>(null);
+  const [isAnalyzingVisitsFile, setIsAnalyzingVisitsFile] = useState(false);
   const [bucketReportTitle, setBucketReportTitle] = useState('');
   const [selectedSalesColIdx, setSelectedSalesColIdx] = useState<number>(-1);
   const [selectedBucketColIdx, setSelectedBucketColIdx] = useState<number>(-1);
@@ -100,6 +104,7 @@ const App: React.FC = () => {
   const [selectedSalesUsers, setSelectedSalesUsers] = useState<string[]>([]);
   const [selectedBuckets, setSelectedBuckets] = useState<string[]>([]);
   const [columnFilters, setColumnFilters] = useState<Record<number, string[]>>({});
+  const [visitsColumnFilters, setVisitsColumnFilters] = useState<Record<number, string[]>>({});
 
   // Sync hash routing for browser navigation
   React.useEffect(() => {
@@ -125,6 +130,8 @@ const App: React.FC = () => {
     setCurrentPage(page);
     setFile(null);
     setVisitsFile(null);
+    setVisitsAnalysis(null);
+    setVisitsColumnFilters({});
     setFiles([]);
     setResult(null);
     setError(null);
@@ -177,6 +184,32 @@ const App: React.FC = () => {
       }
     }
   }, [file, activeTab]);
+
+  // Auto-scan uploaded Visits Excel file for Bucket Report - Leads (Presales) - Visits Done
+  React.useEffect(() => {
+    if (activeTab === BUCKET_REPORT_PRESALES_VISITS) {
+      if (visitsFile) {
+        setIsAnalyzingVisitsFile(true);
+        detectVisitsReportFields(visitsFile)
+          .then(analysis => {
+            setVisitsAnalysis(analysis);
+            setVisitsColumnFilters({});
+          })
+          .catch(err => {
+            console.error("Error analyzing visits file:", err);
+          })
+          .finally(() => {
+            setIsAnalyzingVisitsFile(false);
+          });
+      } else {
+        setVisitsAnalysis(null);
+        setVisitsColumnFilters({});
+      }
+    } else {
+      setVisitsAnalysis(null);
+      setVisitsColumnFilters({});
+    }
+  }, [visitsFile, activeTab]);
 
   // Update Bucket Report Title dates when date inputs change
   React.useEffect(() => {
@@ -251,7 +284,8 @@ const App: React.FC = () => {
           headerIndex: bucketAnalysis.headerIndex,
           reportType,
           dimensionLabel: reportType === 'sales' ? 'Sales' : 'Telecaller',
-          visitsFile: activeTab === BUCKET_REPORT_PRESALES_VISITS ? visitsFile : null
+          visitsFile: activeTab === BUCKET_REPORT_PRESALES_VISITS ? visitsFile : null,
+          visitsColumnFilters: activeTab === BUCKET_REPORT_PRESALES_VISITS ? visitsColumnFilters : {}
         });
       } else if (activeTab === 'Monthly Site Visit Report') {
         data = await processMonthlyFile(file!, startDate, endDate, selectedSource);
@@ -295,6 +329,8 @@ const App: React.FC = () => {
     setActiveTab(tabId);
     setFile(null);
     setVisitsFile(null);
+    setVisitsAnalysis(null);
+    setVisitsColumnFilters({});
     setFiles([]);
     setResult(null);
     setError(null);
@@ -316,10 +352,13 @@ const App: React.FC = () => {
       setStartDate('');
       setEndDate('');
       setVisitsFile(null);
+      setVisitsAnalysis(null);
+      setVisitsColumnFilters({});
       setBucketAnalysis(null);
       setBucketReportTitle('');
       setSelectedSalesColIdx(-1);
       setSelectedBucketColIdx(-1);
+      setSelectedAgencyColIdx(-1);
       setSelectedSalesUsers([]);
       setSelectedBuckets([]);
       setColumnFilters({});
@@ -612,6 +651,10 @@ const App: React.FC = () => {
                 analysis={bucketAnalysis}
                 file={file}
                 visitsFile={activeTab === BUCKET_REPORT_PRESALES_VISITS ? visitsFile : null}
+                visitsAnalysis={visitsAnalysis}
+                isAnalyzingVisitsFile={isAnalyzingVisitsFile}
+                visitsColumnFilters={visitsColumnFilters}
+                onVisitsColumnFiltersChange={setVisitsColumnFilters}
                 reportTitle={bucketReportTitle}
                 onReportTitleChange={setBucketReportTitle}
                 selectedSalesColIdx={selectedSalesColIdx}

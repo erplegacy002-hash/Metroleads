@@ -86,6 +86,17 @@ export interface BucketReportAnalysis {
   totalRows: number;
 }
 
+export interface VisitsReportAnalysis {
+  headerIndex: number;
+  detectedColumns: DetectedColumn[];
+  suggestedProjectColIdx: number;
+  suggestedMobileColIdx: number;
+  suggestedRevisitDateColIdx: number;
+  suggestedDateColIdx: number;
+  detectedProject: string;
+  totalRows: number;
+}
+
 export interface BucketSubRowData {
   agency: string;
   grandTotal: number;
@@ -854,6 +865,210 @@ export async function detectBucketReportFields(
   });
 }
 
+/**
+ * Parses the Visits Excel file and detects categorical columns for filtering (Project Name, Visit Source, etc.)
+ */
+export async function detectVisitsReportFields(file: File): Promise<VisitsReportAnalysis> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = e.target?.result;
+        const workbook = read(data, { type: 'array', cellDates: true });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rawRows = utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
+
+        if (!rawRows || rawRows.length === 0) {
+          throw new Error("The selected Visits Excel file is empty.");
+        }
+
+        const range = utils.decode_range(sheet['!ref'] || 'A1');
+        for (let R = 0; R < rawRows.length; R++) {
+          const row = rawRows[R];
+          if (!row || !Array.isArray(row)) continue;
+          const maxC = Math.max(row.length, range.e.c + 1);
+          for (let C = 0; C < maxC; C++) {
+            const cell_ref = utils.encode_cell({ c: C, r: R });
+            const originalCell = sheet[cell_ref];
+            if (originalCell) {
+              let val = row[C];
+              if (val === undefined || val === null) {
+                val = originalCell.v !== undefined ? originalCell.v : (originalCell.w !== undefined ? originalCell.w : '');
+              }
+              row[C] = val;
+            }
+          }
+        }
+
+        // Identify header row
+        let headerIndex = -1;
+        const knownKeywords = [
+          's.no', 'client id', 'project name', 'mobile no', 'revisit date', 'revisit count',
+          'sales executive', 'enquiry level', 'call status', 'digital agency', 'visit source', 'channel partner'
+        ];
+        let bestScore = -1;
+        for (let i = 0; i < Math.min(15, rawRows.length); i++) {
+          const row = rawRows[i];
+          if (!Array.isArray(row)) continue;
+          const strCells = row.map(c => getCellValue(c).toLowerCase().trim()).filter(Boolean);
+          let score = 0;
+          for (const cell of strCells) {
+            if (knownKeywords.some(kw => cell === kw || cell.includes(kw))) {
+              score += 3;
+            } else if (cell.length > 0 && cell.length < 30) {
+              score += 1;
+            }
+          }
+          if (score > bestScore) {
+            bestScore = score;
+            headerIndex = i;
+          }
+        }
+        if (headerIndex === -1) headerIndex = 0;
+
+        const headerRow = rawRows[headerIndex] || [];
+        const numCols = Math.max(headerRow.length, range.e.c + 1);
+        const dataRows = rawRows.slice(headerIndex + 1).filter(r => Array.isArray(r) && r.some(c => getCellValue(c).trim().length > 0));
+
+        let suggestedProjectColIdx = -1;
+        let suggestedMobileColIdx = -1;
+        let suggestedRevisitDateColIdx = -1;
+        let suggestedDateColIdx = -1;
+        let detectedProject = '';
+
+        const detectedColumns: DetectedColumn[] = [];
+
+        // Excluded headers from being dropdown filters
+        const excludedHeaders = [
+          's.no', 'sr no', 'sno', 'client id', 'mobile no', 'mobile number', 'secondary mobile no',
+          'whatsapp no', 'firm phone', 'email id', 'customer name', 'min budget', 'max budget',
+          'remark', 'source description', 'revisit date', 'date', 'follow-up date', 'expiry date',
+          'source expiry', 'created at', 'updated at', 're enquiry count', 'revisit count'
+        ];
+
+        for (let c = 0; c < numCols; c++) {
+          const rawHeader = getCellValue(headerRow[c]).trim();
+          if (!rawHeader) continue;
+          const lowerHeader = rawHeader.toLowerCase();
+
+          if (lowerHeader === 'mobile no' || lowerHeader === 'mobile number' || lowerHeader === 'mobile' || lowerHeader === 'phone') {
+            if (suggestedMobileColIdx === -1) suggestedMobileColIdx = c;
+          }
+          if (lowerHeader === 'revisit date' || lowerHeader === 're-visit date') {
+            if (suggestedRevisitDateColIdx === -1) suggestedRevisitDateColIdx = c;
+          }
+          if (lowerHeader === 'date' || lowerHeader === 'visit date') {
+            if (suggestedDateColIdx === -1) suggestedDateColIdx = c;
+          }
+
+          if (excludedHeaders.some(kw => lowerHeader === kw || lowerHeader.startsWith(kw))) {
+            continue;
+          }
+
+          if (lowerHeader.includes('date') || lowerHeader.includes('time') || lowerHeader.endsWith(' at')) {
+            continue;
+          }
+
+          const values: string[] = [];
+          const counts: Record<string, number> = {};
+
+          for (const row of dataRows) {
+            const rawVal = getCellValue(row[c]);
+            const val = normalizeRecordValue(rawVal, false);
+            values.push(val);
+            counts[val] = (counts[val] || 0) + 1;
+          }
+
+          const totalNonEmpty = values.length;
+          if (totalNonEmpty === 0) continue;
+
+          const rawUnique = Object.keys(counts);
+          const uniqueVals = rawUnique.filter(v => v !== '(blank)');
+          if (rawUnique.includes('(blank)')) {
+            uniqueVals.push('(blank)');
+          }
+          const uniqueCount = uniqueVals.length;
+
+          // Categorical check
+          const isCategorical = uniqueCount <= 50 || (dataRows.length > 15 && (uniqueCount / totalNonEmpty) <= 0.65);
+          const avgLength = values.reduce((sum, v) => sum + v.length, 0) / (totalNonEmpty || 1);
+          if (avgLength > 50) continue;
+
+          let role: 'sales' | 'bucket' | 'project' | 'source' | 'agency' | 'other' = 'other';
+          let roleLabel = rawHeader;
+
+          if (lowerHeader === 'project name' || lowerHeader === 'project' || lowerHeader.includes('project')) {
+            role = 'project';
+            roleLabel = 'Project Name (Visits)';
+            if (suggestedProjectColIdx === -1 || lowerHeader === 'project name') {
+              suggestedProjectColIdx = c;
+              if (uniqueVals.length > 0) {
+                const sortedProjects = [...uniqueVals].sort((a, b) => counts[b] - counts[a]);
+                detectedProject = sortedProjects[0];
+              }
+            }
+          } else if (lowerHeader.includes('visit source') || lowerHeader === 'source') {
+            role = 'source';
+            roleLabel = 'Visit Source';
+          } else if (lowerHeader.includes('digital agency')) {
+            role = 'agency';
+            roleLabel = 'Digital Agency';
+          } else if (lowerHeader.includes('sales executive') || lowerHeader === 'sales') {
+            role = 'sales';
+            roleLabel = 'Sales Executive';
+          } else if (lowerHeader.includes('enquiry level')) {
+            role = 'bucket';
+            roleLabel = 'Enquiry Level';
+          } else if (lowerHeader.includes('channel partner')) {
+            roleLabel = 'Channel Partner';
+          } else if (lowerHeader.includes('call status')) {
+            roleLabel = 'Call Status';
+          } else if (lowerHeader.includes('configuration')) {
+            roleLabel = 'Configuration';
+          } else if (lowerHeader.includes('sourcing manager')) {
+            roleLabel = 'Sourcing Manager';
+          }
+
+          if (isCategorical || role !== 'other') {
+            const sortedUniqueValues = [...uniqueVals].sort((a, b) => counts[b] - counts[a]);
+            detectedColumns.push({
+              colIndex: c,
+              headerName: rawHeader,
+              role,
+              roleLabel,
+              uniqueValues: sortedUniqueValues,
+              valueCounts: counts,
+              totalCount: totalNonEmpty
+            });
+          }
+        }
+
+        // Sort detected columns so Project Name comes first
+        detectedColumns.sort((a, b) => {
+          const order = { project: 1, source: 2, agency: 3, sales: 4, bucket: 5, other: 6 };
+          return (order[a.role] || 99) - (order[b.role] || 99);
+        });
+
+        resolve({
+          headerIndex,
+          detectedColumns,
+          suggestedProjectColIdx,
+          suggestedMobileColIdx,
+          suggestedRevisitDateColIdx,
+          suggestedDateColIdx,
+          detectedProject,
+          totalRows: dataRows.length
+        });
+      } catch (err: any) {
+        console.error("Error detecting visits report columns:", err);
+        reject(err);
+      }
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 interface VisitRecord {
   mobile: string;
   revisitDate: Date | null;
@@ -880,6 +1095,7 @@ export async function computeBucketReportTable(
     dimensionLabel?: string;
     reportType?: 'sales' | 'presales' | 'presales_visits';
     visitsFile?: File | null;
+    visitsColumnFilters?: Record<number, string[]>;
   }
 ): Promise<BucketTableSummary> {
   return new Promise(async (resolve, reject) => {
@@ -894,7 +1110,8 @@ export async function computeBucketReportTable(
         reportTitle, 
         headerIndex, 
         reportType,
-        visitsFile 
+        visitsFile,
+        visitsColumnFilters
       } = options;
 
       const isPresales = reportType === 'presales' || reportType === 'presales_visits';
@@ -937,6 +1154,10 @@ export async function computeBucketReportTable(
       // 2. Parse Visits Excel file if provided
       const visitsByMobile = new Map<string, VisitRecord[]>();
       let hasValidVisitsData = false;
+      let visitMobileColIdx = -1;
+      let visitRevisitDateColIdx = -1;
+      let visitDateColIdx = -1;
+      let visitProjectColIdx = -1;
 
       if (wantsVisitsDone && visitsFile) {
         try {
@@ -960,10 +1181,6 @@ export async function computeBucketReportTable(
             }
 
             const visitsHeaderRow = rawVisitsRows[visitsHeaderIdx] || [];
-            let visitMobileColIdx = -1;
-            let visitRevisitDateColIdx = -1;
-            let visitDateColIdx = -1;
-            let visitProjectColIdx = -1;
 
             visitsHeaderRow.forEach((cell, idx) => {
               const h = getCellValue(cell).toLowerCase().trim();
@@ -992,6 +1209,24 @@ export async function computeBucketReportTable(
             for (let i = visitsHeaderIdx + 1; i < rawVisitsRows.length; i++) {
               const vRow = rawVisitsRows[i];
               if (!Array.isArray(vRow) || vRow.length === 0) continue;
+
+              // Apply visitsColumnFilters (including Project selection)
+              if (visitsColumnFilters) {
+                let passesVisitsFilters = true;
+                for (const colIdxStr of Object.keys(visitsColumnFilters)) {
+                  const cIdx = parseInt(colIdxStr, 10);
+                  const allowed = visitsColumnFilters[cIdx];
+                  if (allowed && allowed.length > 0) {
+                    const val = normalizeRecordValue(getCellValue(vRow[cIdx]), false);
+                    if (!allowed.includes(val)) {
+                      passesVisitsFilters = false;
+                      break;
+                    }
+                  }
+                }
+                if (!passesVisitsFilters) continue;
+              }
+
               const rawMobile = visitMobileColIdx !== -1 ? vRow[visitMobileColIdx] : null;
               const normMobile = normalizePhoneNumber(rawMobile);
               if (!normMobile) continue;
@@ -1013,10 +1248,13 @@ export async function computeBucketReportTable(
         }
       }
 
-      // Determine current project name
+      // Determine current project name from Leads Excel filters or Visits Excel filters
       let currentProjectName = '';
       if (leadsProjectColIdx !== -1 && columnFilters[leadsProjectColIdx] && columnFilters[leadsProjectColIdx].length === 1) {
         currentProjectName = columnFilters[leadsProjectColIdx][0];
+      }
+      if (!currentProjectName && visitProjectColIdx !== -1 && visitsColumnFilters?.[visitProjectColIdx]?.length === 1) {
+        currentProjectName = visitsColumnFilters[visitProjectColIdx][0];
       }
       if (!currentProjectName && reportTitle) {
         const parts = reportTitle.split('|').map(p => p.trim());
@@ -1621,6 +1859,7 @@ export async function processBucketSiteVisitFile(
     dimensionLabel?: string;
     reportType?: 'sales' | 'presales' | 'presales_visits';
     visitsFile?: File | null;
+    visitsColumnFilters?: Record<number, string[]>;
   }
 ): Promise<ProcessResponse> {
   const summary = await computeBucketReportTable(file, options);
